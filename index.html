@@ -13,6 +13,10 @@
   :root{
     --amber:#ffb36b; --ink:#f4e9dc; --muted:#a8968a; --line:#2a2320; --card:#151110;
     --sky:#000; --glow:#000; --sunY:140%; --sunR:10%; --clock:#3a1c0a;
+    --acc2:#ff8f3d; --accInk:#2a1205; --setupGlow:#3b1606;
+    --r1:#fff6e3; --r2:#ffd9a1; --r3:#ffb46e; --rInk:#5a2c10; --rSub:#7a4520; --rSub2:#8a5530; --rBtn:#6a3412; --rBtnText:#fff1de;
+    --m1:#fff4e2; --m2:#ffe3bd; --m3:#ffcf98; --mInk:#3d1f0c; --mGreet:#8a4e22; --mSub:#6a3a18; --mLabel:#9a5f33; --mMuted:#9a6a45; --mBtn:#5a2c10;
+    --nl1:#b8571c; --nl2:#6a2a0c; --nl3:#1e0a03; --nb1:#f08a3c; --nb2:#a8461a; --nb3:#3a1406;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;height:100%;background:#000;color:var(--ink);font-family:Outfit,system-ui,sans-serif;overflow:hidden;user-select:none}
@@ -22,7 +26,7 @@
   .screen.on{display:flex}
 
   /* ---------- Setup ---------- */
-  #setup{flex-direction:column;overflow-y:auto;padding:28px 22px 40px;background:radial-gradient(120% 70% at 50% 110%,#3b1606 0%,#120806 45%,#000 75%)}
+  #setup{flex-direction:column;overflow-y:auto;padding:28px 22px 40px;background:radial-gradient(120% 70% at 50% 110%,var(--setupGlow) 0%,#0c0a09 45%,#000 75%)}
   #setup h1{font-weight:300;font-size:22px;letter-spacing:.04em;margin:0 0 4px;color:var(--amber)}
   #setup .sub{color:var(--muted);font-size:14px;margin-bottom:18px}
   .timebox input{background:transparent;border:0;color:var(--ink);font:200 56px Outfit,sans-serif;text-align:center;width:100%;color-scheme:dark}
@@ -31,7 +35,7 @@
   .card label.t{display:block;font-size:13px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px}
   .chips{display:flex;flex-wrap:wrap;gap:8px}
   .chip{padding:9px 14px;border-radius:999px;background:#211a17;color:#cdbcae;font-size:15px}
-  .chip.sel{background:var(--amber);color:#2a1205;font-weight:600}
+  .chip.sel{background:var(--amber);color:var(--accInk);font-weight:600}
   .days .chip{width:40px;height:40px;padding:0;display:grid;place-items:center}
   .row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 0}
   .row span{font-size:16px}
@@ -41,14 +45,14 @@
   .toggle{width:52px;height:30px;border-radius:30px;background:#2c2420;position:relative;flex:none}
   .toggle::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#7a6a60;transition:.2s}
   .toggle.on{background:var(--amber)}
-  .toggle.on::after{left:25px;background:#2a1205}
+  .toggle.on::after{left:25px;background:var(--accInk)}
   .big{width:100%;padding:18px;border-radius:18px;font-size:20px;font-weight:600;margin-top:8px}
-  .primary{background:linear-gradient(180deg,#ffbe7a,#ff8f3d);color:#2a1205}
+  .primary{background:linear-gradient(180deg,var(--amber),var(--acc2));color:var(--accInk)}
   .ghost{background:#1c1513;color:#dcc9b9;font-weight:400;font-size:16px;padding:14px}
   .small{padding:10px 14px;border-radius:12px;background:#2a201c;color:#e7cdb5;font-size:14px}
   .status{font-size:13px;color:var(--muted);margin-top:16px;line-height:1.5}
   .status b{color:#e8c9a8;font-weight:400}
-  .warn{color:#ffb36b}
+  .warn{color:var(--amber)}
   .sub-panel{display:none;margin-top:10px}
   .sub-panel.on{display:block}
   #songList{font-size:14px;color:#cdbcae;margin:8px 0;line-height:1.6}
@@ -66,28 +70,28 @@
   #nControls button{padding:14px 20px;border-radius:14px;background:rgba(40,25,18,.85);color:#d9b89a;font-size:15px}
 
   /* ---------- Ringing ---------- */
-  #ring{flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(90% 70% at 50% 85%,#fff6e3,#ffd9a1 55%,#ffb46e)}
-  #rClock{font-weight:200;font-size:min(28vw,180px);color:#5a2c10;line-height:1}
-  #rMsg{color:#7a4520;font-size:20px;margin:8px 0 6px;text-align:center}
-  #rNow{color:#8a5530;font-size:15px;margin-bottom:34px;min-height:20px;text-align:center;padding:0 20px}
+  #ring{flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(90% 70% at 50% 85%,var(--r1),var(--r2) 55%,var(--r3))}
+  #rClock{font-weight:200;font-size:min(28vw,180px);color:var(--rInk);line-height:1}
+  #rMsg{color:var(--rSub);font-size:20px;margin:8px 0 6px;text-align:center}
+  #rNow{color:var(--rSub2);font-size:15px;margin-bottom:34px;min-height:20px;text-align:center;padding:0 20px}
   .rbtns{display:flex;flex-direction:column;gap:14px;width:min(86vw,420px)}
-  #snoozeBtn{background:rgba(255,255,255,.55);color:#6a3412;padding:22px;border-radius:22px;font-size:22px}
-  #upBtn{background:#6a3412;color:#fff1de;padding:22px;border-radius:22px;font-size:22px;font-weight:600}
+  #snoozeBtn{background:rgba(255,255,255,.55);color:var(--rBtn);padding:22px;border-radius:22px;font-size:22px}
+  #upBtn{background:var(--rBtn);color:var(--rBtnText);padding:22px;border-radius:22px;font-size:22px;font-weight:600}
 
   /* ---------- Morning ---------- */
-  #morning{flex-direction:column;overflow-y:auto;padding:30px 22px 30px;background:linear-gradient(180deg,#fff4e2 0%,#ffe3bd 55%,#ffcf98 100%);color:#3d1f0c}
-  #mGreet{font-size:22px;font-weight:300;color:#8a4e22}
+  #morning{flex-direction:column;overflow-y:auto;padding:30px 22px 30px;background:linear-gradient(180deg,var(--m1) 0%,var(--m2) 55%,var(--m3) 100%);color:var(--mInk)}
+  #mGreet{font-size:22px;font-weight:300;color:var(--mGreet)}
   #mClock{font-size:min(24vw,150px);font-weight:200;line-height:1;margin:2px 0 0;font-variant-numeric:tabular-nums}
-  #mDate{font-size:20px;margin:6px 0 20px;color:#6a3a18}
+  #mDate{font-size:20px;margin:6px 0 20px;color:var(--mSub)}
   .mcard{background:rgba(255,255,255,.55);border-radius:20px;padding:16px 18px;margin-bottom:14px}
-  .mcard h3{margin:0 0 10px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#9a5f33;font-weight:600;display:flex;justify-content:space-between}
-  .mcard h3 a{color:#9a5f33;text-transform:none;letter-spacing:0;font-weight:400}
+  .mcard h3{margin:0 0 10px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--mLabel);font-weight:600;display:flex;justify-content:space-between}
+  .mcard h3 a{color:var(--mLabel);text-transform:none;letter-spacing:0;font-weight:400}
   .wxTop{display:flex;align-items:center;gap:14px}
   .wxEm{font-size:54px;line-height:1}
   .wxTemp{font-size:52px;font-weight:200;line-height:1}
-  .wxDesc{font-size:17px;color:#6a3a18}
+  .wxDesc{font-size:17px;color:var(--mSub)}
   .wxGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:14px;text-align:center}
-  .wxGrid small,.sunrow small{display:block;font-size:11px;color:#9a6a45;text-transform:uppercase;letter-spacing:.06em}
+  .wxGrid small,.sunrow small{display:block;font-size:11px;color:var(--mMuted);text-transform:uppercase;letter-spacing:.06em}
   .wxGrid span{font-size:18px}
   .sunrow{display:flex;justify-content:space-between;font-size:18px}
   #tasks{list-style:none;margin:0;padding:0}
@@ -95,11 +99,15 @@
   #tasks li:first-child{border-top:0}
   .dot{width:10px;height:10px;border-radius:50%;margin-top:7px;flex:none;background:#c9a98c}
   .p1{background:#d1453b}.p2{background:#eb8909}.p3{background:#246fe0}
-  .tnote{color:#9a6a45;font-size:15px}
-  .willy{display:block;text-align:center;text-decoration:none;background:rgba(255,255,255,.7);color:#5a2c10;padding:14px;border-radius:16px;font-size:16px;margin-bottom:10px}
-  #mDone{background:#5a2c10;color:#fff1de;margin-top:4px}
+  .tnote{color:var(--mMuted);font-size:15px}
+  .willy{display:block;text-align:center;text-decoration:none;background:rgba(255,255,255,.7);color:var(--mBtn);padding:14px;border-radius:16px;font-size:16px;margin-bottom:10px}
+  #mDone{background:var(--mBtn);color:var(--rBtnText);margin-top:4px}
 
   .rleft{text-align:center}
+  .themes{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
+  .theme{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;background:#1c1614;border:2px solid transparent;font-size:15px;color:#e2d4c8;text-align:left}
+  .theme.sel{border-color:var(--amber)}
+  .theme i{width:28px;height:28px;border-radius:50%;flex:none}
   #dayTimes{display:none;margin-top:6px}
   #dayTimes.on{display:block}
   .dt{display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-top:1px solid #241d1a}
@@ -107,9 +115,9 @@
   .dt span{font-size:16px;color:#e2cdb9}
   .dt input{background:transparent;border:0;color:var(--ink);font:300 24px Outfit,sans-serif;color-scheme:dark;text-align:right;width:auto}
   #nightLight{position:absolute;inset:0;display:none;align-items:flex-end;justify-content:center;padding-bottom:40px;
-    background:radial-gradient(75% 60% at 50% 55%,#b8571c 0%,#6a2a0c 45%,#1e0a03 100%);z-index:5}
+    background:radial-gradient(75% 60% at 50% 55%,var(--nl1) 0%,var(--nl2) 45%,var(--nl3) 100%);z-index:5}
   #nightLight.on{display:flex}
-  #nightLight.bright{background:radial-gradient(85% 70% at 50% 55%,#f08a3c 0%,#a8461a 45%,#3a1406 100%)}
+  #nightLight.bright{background:radial-gradient(85% 70% at 50% 55%,var(--nb1) 0%,var(--nb2) 45%,var(--nb3) 100%)}
   #nlNote{color:rgba(255,220,190,.55);font-size:15px;text-align:center;line-height:1.6}
   .mL,.mR{display:contents}
   #mDone{order:9}
@@ -138,6 +146,10 @@
 
   <div class="timebox"><input id="alarmTime" type="time" value="06:30"></div>
   <div class="nexttxt" id="nextTxt"></div>
+  <div class="card" id="autoCard" style="display:none">
+    <div class="row"><span>Wake me automatically</span><div class="toggle" id="autoTgl"></div></div>
+    <div class="hint" style="margin-top:2px">The app opens itself and starts the sunrise, even if you were watching YouTube or the screen was off. No need to tap Goodnight.</div>
+  </div>
 
   <div class="card">
     <label class="t">Repeat</label>
@@ -196,6 +208,11 @@
     </div>
     <div class="row"><span>Fade in over</span><div class="chips" id="fadeChips"></div></div>
     <div class="row"><span>Snooze</span><div class="chips" id="snzChips"></div></div>
+  </div>
+
+  <div class="card">
+    <label class="t">Colour theme</label>
+    <div class="themes" id="themes"></div>
   </div>
 
   <div class="card">
@@ -299,7 +316,8 @@
   ];
   const DEF = { time:"06:30", days:[1,2,3,4,5], dur:30, src:"chimes", station:0, customUrl:"", vol:70, fade:3, snooze:9, dim:2,
                 lat:-37.814, lon:144.963, place:"Melbourne", willy:"", todoToken:"",
-                spClient:"", spLink:"", spShuffle:true, spDevice:null, perDay:false, dayTimes:{} };
+                spClient:"", spLink:"", spShuffle:true, spDevice:null, perDay:false, dayTimes:{}, theme:"sunrise", auto:true, skip:0 };
+  const NATIVE = (window.Android && typeof window.Android.schedule === "function") ? window.Android : null;
   // Spotify tokens are kept separately from settings
   let SPT = {};
   try { SPT = JSON.parse(localStorage.getItem("sunrise-spotify") || "{}"); } catch(e){}
@@ -318,6 +336,64 @@
 
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
 
+  // ---------- Colour themes ----------
+  const THEMES = {
+    sunrise:{ name:"Sunrise", swatch:"#ff9a4a",
+      vars:{amber:"#ffb36b",acc2:"#ff8f3d",accInk:"#2a1205",setupGlow:"#3b1606",r1:"#fff6e3",r2:"#ffd9a1",r3:"#ffb46e",rInk:"#5a2c10",rSub:"#7a4520",rSub2:"#8a5530",rBtn:"#6a3412",rBtnText:"#fff1de",
+            m1:"#fff4e2",m2:"#ffe3bd",m3:"#ffcf98",mInk:"#3d1f0c",mGreet:"#8a4e22",mSub:"#6a3a18",mLabel:"#9a5f33",mMuted:"#9a6a45",mBtn:"#5a2c10",nl1:"#b8571c",nl2:"#6a2a0c",nl3:"#1e0a03",nb1:"#f08a3c",nb2:"#a8461a",nb3:"#3a1406"},
+      sky:[[0,"#000000"],[.25,"#0a0100"],[.5,"#3a0d02"],[.7,"#a8400f"],[.85,"#f59a4a"],[1,"#fff1d6"]],
+      glow:[[0,"#000000"],[.15,"#2c0600"],[.4,"#a3260a"],[.65,"#ff7a26"],[.85,"#ffc979"],[1,"#fff8ea"]],
+      night:["#1e0d05","#3a1c0a","#5a2c12","#7a3d18","#a0552a","#c87a45"], clockMid:"#ffb37a", clockHi:"#c27a48", clockEnd:"#5a2c10" },
+    ocean:{ name:"Ocean dawn", swatch:"#3aa2c2",
+      vars:{amber:"#7cc8e0",acc2:"#3a9ec2",accInk:"#04212d",setupGlow:"#06283a",r1:"#f4fbff",r2:"#cdeaf3",r3:"#93cfe2",rInk:"#0d3a4c",rSub:"#1f5a70",rSub2:"#2f6c82",rBtn:"#0f4459",rBtnText:"#effaff",
+            m1:"#f3fbff",m2:"#dcf0f7",m3:"#bfe2ee",mInk:"#0c2d3b",mGreet:"#2c6a82",mSub:"#1d4b5d",mLabel:"#2f7088",mMuted:"#4f8195",mBtn:"#0f4459",nl1:"#2f7e9a",nl2:"#123c4c",nl3:"#040f14",nb1:"#6cc3dd",nb2:"#25708a",nb3:"#08202a"},
+      sky:[[0,"#000000"],[.25,"#00040a"],[.5,"#04202e"],[.7,"#16607c"],[.85,"#7cc4d8"],[1,"#f2fbff"]],
+      glow:[[0,"#000000"],[.15,"#00121c"],[.4,"#0d4f6a"],[.65,"#3aa2c2"],[.85,"#b8e6f0"],[1,"#ffffff"]],
+      night:["#06141c","#0b2433","#12384d","#1b5068","#2a6d88","#3c8fae"], clockMid:"#9fe0f0", clockHi:"#3f8fae", clockEnd:"#0d3a4c" },
+    lavender:{ name:"Lavender", swatch:"#b77ae6",
+      vars:{amber:"#c9a6ff",acc2:"#9a6ae8",accInk:"#1f0f38",setupGlow:"#2a1240",r1:"#fbf6ff",r2:"#e9dcff",r3:"#cdb2f5",rInk:"#3b1d63",rSub:"#5a3a85",rSub2:"#6a4a95",rBtn:"#432070",rBtnText:"#f7f1ff",
+            m1:"#fbf7ff",m2:"#efe5ff",m3:"#ddcaf8",mInk:"#2b1547",mGreet:"#6a45a0",mSub:"#47306b",mLabel:"#7a55ad",mMuted:"#8a70ad",mBtn:"#432070",nl1:"#7a3fa0",nl2:"#341448",nl3:"#0e0514",nb1:"#c07ae6",nb2:"#6a2f8f",nb3:"#1f0a2a"},
+      sky:[[0,"#000000"],[.25,"#05010a"],[.5,"#22093a"],[.7,"#6a2f8f"],[.85,"#e39ad0"],[1,"#fff2fb"]],
+      glow:[[0,"#000000"],[.15,"#140422"],[.4,"#5a1f7a"],[.65,"#d26aa8"],[.85,"#ffc3dc"],[1,"#fff8fd"]],
+      night:["#120820","#1f0f38","#2f1a52","#432870","#5c3a94","#7a52b8"], clockMid:"#e8c8ff", clockHi:"#9a6ac8", clockEnd:"#3b1d63" },
+    forest:{ name:"Forest", swatch:"#8fc040",
+      vars:{amber:"#a8d672",acc2:"#6aa63c",accInk:"#12240a",setupGlow:"#14280e",r1:"#fbfdf2",r2:"#e4f2c8",r3:"#c4e19a",rInk:"#22400f",rSub:"#3a5a22",rSub2:"#4a6a32",rBtn:"#2b4d14",rBtnText:"#f6fbea",
+            m1:"#fbfdf3",m2:"#eaf5d6",m3:"#d3eab0",mInk:"#1c3410",mGreet:"#4a7a2a",mSub:"#2f4d1c",mLabel:"#5a8a36",mMuted:"#6f8f55",mBtn:"#2b4d14",nl1:"#5f8a2a",nl2:"#24380e",nl3:"#0a1204",nb1:"#a6d066",nb2:"#4f7a22",nb3:"#16220a"},
+      sky:[[0,"#000000"],[.25,"#020601"],[.5,"#0f2a0a"],[.7,"#3f6e1e"],[.85,"#c6df7a"],[1,"#fbfde9"]],
+      glow:[[0,"#000000"],[.15,"#071404"],[.4,"#2f5a12"],[.65,"#8fc040"],[.85,"#e4f2a0"],[1,"#ffffef"]],
+      night:["#0a1406","#13240c","#1e3812","#2a4f1a","#3a6a24","#4f8a32"], clockMid:"#d6f0a8", clockHi:"#6f9a3c", clockEnd:"#22400f" },
+    minimal:{ name:"Minimal", swatch:"#d8d3ca",
+      vars:{amber:"#e8e4dc",acc2:"#b8b2a8",accInk:"#1a1816",setupGlow:"#1e1c1a",r1:"#ffffff",r2:"#f0eeea",r3:"#dcd8d0",rInk:"#2a2826",rSub:"#4a4744",rSub2:"#5a5754",rBtn:"#2a2826",rBtnText:"#fafaf8",
+            m1:"#ffffff",m2:"#f4f2ee",m3:"#e6e2da",mInk:"#1e1c1a",mGreet:"#5a5650",mSub:"#3a3734",mLabel:"#6a665f",mMuted:"#7a766f",mBtn:"#2a2826",nl1:"#6a645c",nl2:"#2a2622",nl3:"#0a0908",nb1:"#c8c2b8",nb2:"#6a645c",nb3:"#1e1c1a"},
+      sky:[[0,"#000000"],[.3,"#050505"],[.55,"#2a2826"],[.75,"#7a766f"],[.9,"#dcd8d0"],[1,"#ffffff"]],
+      glow:[[0,"#000000"],[.2,"#121110"],[.45,"#4a4744"],[.7,"#b0aaa0"],[.88,"#f0eeea"],[1,"#ffffff"]],
+      night:["#141312","#222120","#33312f","#4a4744","#66625d","#8a857f"], clockMid:"#f0ede8", clockHi:"#8a857f", clockEnd:"#2a2826" }
+  };
+  function applyTheme(){
+    const T = THEMES[S.theme] || THEMES.sunrise;
+    Object.entries(T.vars).forEach(([k,v])=>document.documentElement.style.setProperty("--"+k, v));
+  }
+  Object.entries(THEMES).forEach(([k,T])=>{
+    const b = document.createElement("button"); b.className = "theme"; b.dataset.v = k;
+    b.innerHTML = `<i style="background:radial-gradient(circle at 50% 70%,${T.glow[4][1]},${T.swatch} 45%,${T.sky[2][1]} 100%)"></i>${T.name}`;
+    b.onclick = () => { S.theme = k; save(); paint(); };
+    $("themes").appendChild(b);
+  });
+
+  // ---------- Android app extras ----------
+  let lastSched = null;
+  function scheduleNative(){
+    if (!NATIVE) return;
+    try {
+      const a = S.auto ? nextAlarm() : null;
+      const key = a ? `${+a}|${S.dur}` : "off";
+      if (key === lastSched) return; lastSched = key;
+      if (!a){ NATIVE.cancel(); return; }
+      NATIVE.schedule(Math.max(Date.now()+5000, +a - S.dur*60000), +a);
+    } catch(e){}
+  }
+  window.nativeWake = () => { if (mode==="setup" || mode==="morning") enterNight(false); };
+
   // ---------- Setup UI ----------
   const daysEl = $("days");
   DAYN.forEach((d,i)=>{ const b=document.createElement("button"); b.className="chip"; b.textContent=d; b.onclick=()=>{ S.days = S.days.includes(i)? S.days.filter(x=>x!==i) : [...S.days,i]; save(); paint(); }; daysEl.appendChild(b); });
@@ -330,6 +406,7 @@
   chipGroup($("srcChips"), ["chimes","spotify","radio","songs"], "src", v=>({chimes:"Chimes",spotify:"Spotify",radio:"Radio stream",songs:"My songs"})[v]);
   STATIONS.forEach(([n],i)=>{ const o=document.createElement("option"); o.value=i; o.textContent=n; $("station").appendChild(o); });
 
+  $("autoTgl").onclick = () => { S.auto = !S.auto; save(); paint(); toast(S.auto ? "The app will open itself at sunrise" : "Tap Goodnight each night instead"); };
   $("perDayTgl").onclick = () => {
     if (!S.days.length) return toast("Pick some repeat days first");
     S.perDay = !S.perDay;
@@ -351,6 +428,7 @@
       const [h,m] = timeFor(t.getDay()).split(":").map(Number);
       t.setHours(h,m,0,0);
       if (t <= from) continue;
+      if (S.skip && t.getTime()===S.skip) continue;
       if (!S.days.length || S.days.includes(t.getDay())) return t;
     }
     return null;
@@ -365,6 +443,12 @@
 
   function paint(){
     $("alarmTime").value = S.time;
+    if (S.skip && S.skip < Date.now()){ S.skip = 0; save(); }
+    applyTheme();
+    [...$("themes").children].forEach(b=>b.classList.toggle("sel", b.dataset.v===S.theme));
+    $("autoCard").style.display = NATIVE ? "" : "none";
+    $("autoTgl").classList.toggle("on", S.auto);
+    scheduleNative();
     const perDayOn = S.perDay && S.days.length > 0;
     $("perDayTgl").classList.toggle("on", S.perDay);
     $("dayTimes").classList.toggle("on", perDayOn);
@@ -469,9 +553,18 @@
     try { if ("wakeLock" in navigator){ await navigator.wakeLock.request("screen"); wakeOK = true; return; } } catch(e){}
     wakeOK = false;
   }
-  document.addEventListener("visibilitychange", ()=>{ if (document.visibilityState==="visible" && mode!=="setup") grabWake(); });
+  document.addEventListener("visibilitychange", ()=>{ if (document.visibilityState==="visible"){ if (mode!=="setup") grabWake(); else if (NATIVE) statusText(); } });
   function statusText(){
     const parts = [];
+    if (NATIVE){
+      let probs = ""; try { probs = NATIVE.problems ? NATIVE.problems() : ""; } catch(e){}
+      const fixes = [];
+      if (probs.includes("notifications")) fixes.push(`<span class="warn">⚠ Notifications are off, so the app can't open itself at sunrise.</span> <button class="small" data-fix="notifications">Fix</button>`);
+      if (probs.includes("fullscreen")) fixes.push(`<span class="warn">⚠ "Full screen notifications" is off, so the app can't open over the lock screen.</span> <button class="small" data-fix="fullscreen">Fix</button>`);
+      $("status").innerHTML = fixes.concat([`✓ Screen stays on and brightness is handled for you.`, `Leave the phone on charge overnight. Keep your normal alarm as a backup for the first few nights.`]).join("<br><br>");
+      $("status").querySelectorAll("[data-fix]").forEach(btn=>btn.onclick=()=>{ try { NATIVE.fix(btn.dataset.fix); } catch(e){} });
+      return;
+    }
     const installed = matchMedia("(display-mode: fullscreen), (display-mode: standalone)").matches;
     if (!installed) parts.push(`<b>Install it:</b> Chrome menu ⋮ → <b>Add to home screen</b> → Install. Then open it from the icon.`);
     if (wakeOK===false) parts.push(`<span class="warn">⚠ Couldn't keep the screen on.</span> Turn on <b>Developer options → Stay awake</b>.`);
@@ -689,20 +782,28 @@
   const hex = h => [1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
   const mix = (a,b,t) => { t=Math.max(0,Math.min(1,t)); const A=hex(a),B=hex(b); return "#"+A.map((v,i)=>Math.round(v+(B[i]-v)*t).toString(16).padStart(2,"0")).join(""); };
   function ramp(stops, p){ for (let i=1;i<stops.length;i++){ if (p<=stops[i][0]){ const [p0,c0]=stops[i-1],[p1,c1]=stops[i]; return mix(c0,c1,(p-p0)/(p1-p0||1)); } } return stops[stops.length-1][1]; }
-  const SKY  = [[0,"#000000"],[.25,"#0a0100"],[.5,"#3a0d02"],[.7,"#a8400f"],[.85,"#f59a4a"],[1,"#fff1d6"]];
-  const GLOW = [[0,"#000000"],[.15,"#2c0600"],[.4,"#a3260a"],[.65,"#ff7a26"],[.85,"#ffc979"],[1,"#fff8ea"]];
-  const NIGHT_CLOCK = ["#1e0d05","#3a1c0a","#5a2c12","#7a3d18","#a0552a","#c87a45"];
   const root = document.documentElement.style;
   function setSunrise(p){
-    root.setProperty("--sky", ramp(SKY,p)); root.setProperty("--glow", ramp(GLOW,p));
+    const T = THEMES[S.theme] || THEMES.sunrise;
+    root.setProperty("--sky", ramp(T.sky,p)); root.setProperty("--glow", ramp(T.glow,p));
     root.setProperty("--sunY", (140 - p*95) + "%"); root.setProperty("--sunR", (20 + p*160) + "%");
-    const base = NIGHT_CLOCK[S.dim-1];
-    root.setProperty("--clock", p<.55 ? mix(base,"#ffb37a",p/.55*.6) : mix("#c27a48","#5a2c10",(p-.55)/.45));
+    // In the Android app the backlight does the dimming, so the clock can use a clearer colour
+    const base = NATIVE ? T.night[4] : T.night[S.dim-1];
+    root.setProperty("--clock", p<.55 ? mix(base,T.clockMid,p/.55*.6) : mix(T.clockHi,T.clockEnd,(p-.55)/.45));
+    if (NATIVE){
+      const nightB = [0.004,0.008,0.015,0.03,0.06,0.1][S.dim-1];
+      bright(nlLevel ? (nlLevel===1 ? 0.3 : 0.8) : (p===0 ? nightB : nightB + (1-nightB)*Math.pow(p,1.3)));
+    }
   }
+  let lastB = null;
+  function bright(v){ if (!NATIVE) return; if (lastB!==null && Math.abs(v-lastB) < 0.003) return; lastB = v; try { NATIVE.setBrightness(v); } catch(e){} }
 
   // ---------- State machine ----------
   let mode = "setup", alarmAt = null, sunriseStart = null, snoozeUntil = null, preview = false, lastShift = 0, wxFetchedAtSunrise = false;
-  const show = id => document.querySelectorAll(".screen").forEach(s=>s.classList.toggle("on", s.id===id));
+  const show = id => {
+    document.querySelectorAll(".screen").forEach(s=>s.classList.toggle("on", s.id===id));
+    if (id==="setup") bright(-1); else if (id==="ring" || id==="morning") bright(1);
+  };
 
   function enterNight(isPreview){
     if (using) stopSound();
@@ -715,6 +816,7 @@
       sunriseStart = new Date(alarmAt.getTime() - S.dur*60000);
     }
     wxFetchedAtSunrise = false;
+    if (!preview){ try { localStorage.setItem("sunrise-armed", JSON.stringify({ alarmAt:+alarmAt, sunriseStart:+sunriseStart })); } catch(e){} }
     if (S.src==="spotify") SP.findDevice().then(d=>{ if (!d) toast("Spotify can't see your speaker. Open Spotify once, or it'll use the chimes."); }).catch(()=>toast("Couldn't reach Spotify. It'll use the chimes if needed."));
     initAudio(); grabWake().then(statusText);
     try { document.documentElement.requestFullscreen && document.documentElement.requestFullscreen().catch(()=>{}); } catch(e){}
@@ -766,8 +868,9 @@
     const base = Date.UTC(y,m,d);
     return { rise:new Date(base + (720-4*(S.lon+ha)-eq)*60000), set:new Date(base + (720-4*(S.lon-ha)-eq)*60000) };
   }
+  function disarm(){ try { localStorage.removeItem("sunrise-armed"); } catch(e){} }
   function enterMorning(){
-    stopSound();
+    stopSound(); disarm(); scheduleNative();
     mode = "morning"; show("morning");
     const now = new Date(), h = now.getHours();
     $("mGreet").textContent = h<12 ? "Good morning" : h<17 ? "Good afternoon" : "Good evening";
@@ -835,15 +938,29 @@
     nlLastTap = now;
     nlTapTimer = setTimeout(()=>nightLight(0), 360);
   });
-  $("nSettings").onclick = () => { nightLight(0); mode="setup"; show("setup"); paint(); };
-  $("nCancel").onclick = () => { nightLight(0); mode="setup"; show("setup"); paint(); toast("Alarm off"); };
+  $("nSettings").onclick = () => { nightLight(0); disarm(); mode="setup"; show("setup"); paint(); };
+  $("nCancel").onclick = () => {
+    nightLight(0); disarm();
+    if (!preview && alarmAt){ S.skip = +alarmAt; save(); }
+    mode="setup"; show("setup"); paint(); toast(S.days.length ? "This alarm is off. Repeats stay on." : "Alarm off");
+  };
   $("goodnight").onclick = () => enterNight(false);
   $("preview").onclick = () => enterNight(true);
 
   paint(); paintSongs(); statusText(); paintTomorrow();
   SP.handleRedirect();
   if (SPT.refresh && S.src==="spotify") SP.listDevices();
-  if (!("wakeLock" in navigator)) { wakeOK=false; statusText(); }
+  if (!NATIVE && !("wakeLock" in navigator)) { wakeOK=false; statusText(); }
+
+  // Resume overnight mode if the app was reloaded or reopened
+  try {
+    const armed = JSON.parse(localStorage.getItem("sunrise-armed") || "null");
+    if (armed && Date.now() < armed.alarmAt + 30*60000 && Date.now() < armed.alarmAt + 1){
+      alarmAt = new Date(armed.alarmAt); sunriseStart = new Date(armed.sunriseStart); preview = false;
+      mode = "night"; show("night"); tick();
+    } else if (armed) disarm();
+  } catch(e){}
+  if (location.hash === "#wake"){ history.replaceState(null, "", location.pathname); setTimeout(()=>window.nativeWake(), 300); }
 })();
 </script>
 </body>

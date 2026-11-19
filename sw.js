@@ -1,5 +1,5 @@
 // Caches the app itself so it opens even if the Wi-Fi is down.
-const CACHE = "sunrise-v4";
+const CACHE = "sunrise-v5";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", e => {
