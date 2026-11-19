@@ -221,6 +221,21 @@ public class MainActivity extends Activity {
             catch (Throwable t) { App.save(MainActivity.this, "Scheduling the alarm", t); }
         }
 
+        /** The phone's Material You colours (from the wallpaper), Android 12 and later. */
+        @JavascriptInterface public String systemColors() {
+            if (Build.VERSION.SDK_INT < 31) return "";
+            int[] ids = { android.R.color.system_accent1_100, android.R.color.system_accent1_200, android.R.color.system_accent1_300,
+                    android.R.color.system_accent1_500, android.R.color.system_accent1_700, android.R.color.system_accent1_800,
+                    android.R.color.system_accent1_900, android.R.color.system_accent2_700, android.R.color.system_neutral1_900 };
+            String[] names = { "a1_100", "a1_200", "a1_300", "a1_500", "a1_700", "a1_800", "a1_900", "a2_700", "n1_900" };
+            StringBuilder sb = new StringBuilder("{");
+            for (int i = 0; i < ids.length; i++) {
+                if (i > 0) sb.append(',');
+                sb.append('"').append(names[i]).append("\":\"").append(String.format("#%06x", 0xFFFFFF & getColor(ids[i]))).append('"');
+            }
+            return sb.append('}').toString();
+        }
+
         // ----- audio -----
         @JavascriptInterface public void radioPlay(String url, double volume) { runOnUiThread(() -> audio.radioPlay(url, (float) volume)); }
         @JavascriptInterface public void radioVolume(double v) { runOnUiThread(() -> audio.radioVolume((float) v)); }

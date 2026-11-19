@@ -8,7 +8,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;600&family=Roboto+Flex:opsz,wght@8..144,300..700&display=swap" rel="stylesheet">
 <style>
   :root{
     --amber:#ffb36b; --ink:#f4e9dc; --muted:#a8968a; --line:#2a2320; --card:#151110;
@@ -133,6 +133,71 @@
     #mClock{font-size:min(16vw,30vh)}
     #mDone{grid-column:1;grid-row:2;align-self:start;order:0}
   }
+
+  /* ================= Material 3 settings screen ================= */
+  #setup{font-family:"Roboto Flex",Roboto,system-ui,sans-serif;background:var(--md-surface);padding:0 16px 32px;color:var(--md-on-surface)}
+  #setup > *{flex-shrink:0}
+  #setup .appbar{position:sticky;top:0;z-index:3;background:var(--md-surface);padding:28px 8px 14px;margin:0 -16px 8px;padding-left:24px}
+  #setup h1{font:400 32px/40px "Roboto Flex",Roboto,sans-serif;color:var(--md-on-surface);letter-spacing:0;margin:0}
+  #setup .sub{font-size:14px;color:var(--md-on-surface-var);margin:2px 0 0}
+  #setup .hero{background:var(--md-primary-container);color:var(--md-on-primary-container);border-radius:28px;padding:18px 16px 16px;margin-bottom:12px}
+  #setup .timebox input{color:var(--md-on-primary-container);font:300 60px "Roboto Flex",sans-serif;font-variation-settings:"opsz" 144}
+  #setup .nexttxt{color:var(--md-on-primary-container);opacity:.85;margin:0;font-size:14px;letter-spacing:.1px}
+  #setup .card{background:var(--md-container);border:0;border-radius:24px;padding:16px;margin-bottom:12px}
+  #setup .card label.t{font:500 14px/20px "Roboto Flex",sans-serif;letter-spacing:.1px;text-transform:none;color:var(--md-primary);margin-bottom:12px}
+  #setup .row span{font-size:16px;color:var(--md-on-surface)}
+  #setup .hint{color:var(--md-on-surface-var);font-size:14px;line-height:20px}
+  #setup .status{color:var(--md-on-surface-var);font-size:14px;line-height:20px;padding:4px 8px}
+  #setup .status b{color:var(--md-on-surface);font-weight:500}
+
+  /* Segmented buttons */
+  #setup .chips:not(.days){display:flex;flex-wrap:nowrap;gap:0;border:1px solid var(--md-outline);border-radius:20px;overflow:hidden;height:40px}
+  #setup .chips:not(.days) .chip{flex:1 1 0;min-width:0;border-radius:0;background:transparent;color:var(--md-on-surface);font:500 14px "Roboto Flex",sans-serif;padding:0 6px;border-left:1px solid var(--md-outline);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #setup .chips:not(.days) .chip:first-child{border-left:0}
+  #setup .chips:not(.days) .chip.sel{background:var(--md-secondary-container);color:var(--md-on-secondary-container);font-weight:600}
+  #setup .chips:not(.days) .chip.sel::before{content:"✓ "}
+  #setup .row .chips:not(.days){flex:0 0 auto;min-width:168px}
+  /* Rows of tonal buttons (Add songs, Find speakers…) stay as separate pills */
+  #setup .chips.btnrow{border:0;height:auto;overflow:visible;gap:8px;flex-wrap:wrap}
+  #setup #spDevices.chips{border:0;height:auto;overflow:visible;gap:8px;flex-wrap:wrap}
+  #setup #spDevices .chip{flex:0 0 auto;border:1px solid var(--md-outline);border-radius:8px;height:32px;padding:0 12px}
+  #setup #spDevices .chip.sel{border-color:transparent}
+
+  /* Day filter chips */
+  #setup .days{gap:6px;justify-content:space-between}
+  #setup .days .chip{width:40px;height:40px;background:transparent;border:1px solid var(--md-outline);color:var(--md-on-surface);font:500 14px "Roboto Flex",sans-serif}
+  #setup .days .chip.sel{background:var(--md-primary);border-color:var(--md-primary);color:var(--md-on-primary)}
+
+  /* Switches */
+  #setup .toggle{width:52px;height:32px;border-radius:16px;background:var(--md-container-highest);border:2px solid var(--md-outline)}
+  #setup .toggle::after{top:6px;left:6px;width:16px;height:16px;background:var(--md-outline);transition:all .2s cubic-bezier(.2,0,0,1)}
+  #setup .toggle.on{background:var(--md-primary);border-color:var(--md-primary)}
+  #setup .toggle.on::after{top:2px;left:22px;width:24px;height:24px;background:var(--md-on-primary)}
+
+  /* Sliders */
+  #setup input[type=range]{-webkit-appearance:none;appearance:none;height:44px;background:transparent}
+  #setup input[type=range]::-webkit-slider-runnable-track{height:16px;border-radius:8px;
+    background:linear-gradient(90deg,var(--md-primary) 0 var(--fill,50%),var(--md-secondary-container) var(--fill,50%) 100%)}
+  #setup input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:4px;height:44px;margin-top:-14px;border-radius:2px;background:var(--md-primary);box-shadow:0 0 0 6px var(--md-container)}
+
+  /* Text fields */
+  #setup input[type=text],#setup input[type=url],#setup input[type=password],#setup select{background:transparent;border:1px solid var(--md-outline);border-radius:4px;height:56px;padding:0 16px;font:16px "Roboto Flex",sans-serif;color:var(--md-on-surface)}
+  #setup input:focus,#setup select:focus{outline:none;border:2px solid var(--md-primary);padding:0 15px}
+
+  /* Buttons */
+  #setup .small{height:40px;padding:0 24px;border-radius:20px;background:var(--md-secondary-container);color:var(--md-on-secondary-container);font:500 14px "Roboto Flex",sans-serif;letter-spacing:.1px}
+  #setup .big{height:56px;padding:0 24px;border-radius:28px;font:500 16px "Roboto Flex",sans-serif;letter-spacing:.15px}
+  #setup .primary{background:var(--md-primary);color:var(--md-on-primary);box-shadow:0 1px 3px rgba(0,0,0,.3),0 4px 8px 3px rgba(0,0,0,.15)}
+  #setup .ghost{background:transparent;color:var(--md-primary);border:1px solid var(--md-outline)}
+
+  /* Theme picker as cards */
+  #setup .theme{background:var(--md-container-high);border-radius:16px;color:var(--md-on-surface);font:500 14px "Roboto Flex",sans-serif;height:56px}
+  #setup .theme.sel{border-color:var(--md-primary);background:var(--md-secondary-container);color:var(--md-on-secondary-container)}
+  #setup .dt{border-top:1px solid var(--md-outline-var)}
+  #setup .dt span{color:var(--md-on-surface)}
+  #setup .dt input{color:var(--md-on-surface);font-family:"Roboto Flex",sans-serif}
+  #setup #songList{color:var(--md-on-surface-var)}
+  #setup .fc{color:var(--md-on-surface)}
   .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#2a1d17;color:#f3d8bd;padding:12px 18px;border-radius:12px;font-size:14px;opacity:0;transition:.3s;pointer-events:none;z-index:9;max-width:90vw;text-align:center}
   .toast.show{opacity:1}
 </style>
@@ -141,11 +206,12 @@
 
 <!-- SETUP -->
 <section id="setup" class="screen on">
-  <h1>☀︎ Sunrise Alarm</h1>
-  <div class="sub">Wake up to light, not noise.</div>
+  <header class="appbar"><h1>Sunrise</h1><div class="sub">Wake up to light, not noise.</div></header>
 
-  <div class="timebox"><input id="alarmTime" type="time" value="06:30"></div>
-  <div class="nexttxt" id="nextTxt"></div>
+  <div class="hero">
+    <div class="timebox"><input id="alarmTime" type="time" value="06:30"></div>
+    <div class="nexttxt" id="nextTxt"></div>
+  </div>
   <div class="card" id="autoCard" style="display:none">
     <div class="row"><span>Wake me automatically</span><div class="toggle" id="autoTgl"></div></div>
     <div class="hint" style="margin-top:2px">The app opens itself and starts the sunrise, even if you were watching YouTube or the screen was off. No need to tap Goodnight.</div>
@@ -175,7 +241,7 @@
 
     <div class="sub-panel" id="songsPanel">
       <div id="songList">No songs added yet.</div>
-      <div class="chips">
+      <div class="chips btnrow">
         <button class="small" id="addSongs">Add songs from phone</button>
         <button class="small" id="clearSongs">Clear</button>
       </div>
@@ -188,14 +254,14 @@
       <div id="spSetup">
         <input type="text" id="spClient" placeholder="Spotify Client ID" autocomplete="off">
         <div class="hint">Redirect URI to paste into Spotify: <b id="spRedirect" style="user-select:text;color:#e8c9a8;font-weight:400"></b></div>
-        <div class="chips" style="margin-top:8px"><button class="small" id="spConnect">Connect Spotify</button></div>
+        <div class="chips btnrow" style="margin-top:8px"><button class="small" id="spConnect">Connect Spotify</button></div>
       </div>
       <div id="spReady">
         <input type="url" id="spLink" placeholder="Paste a Spotify playlist, album or song link">
         <div class="row"><span>Shuffle</span><div class="toggle" id="spShuffle"></div></div>
         <div style="font-size:14px;color:var(--muted);margin-top:4px">Play on</div>
         <div class="chips" id="spDevices" style="margin-top:6px"></div>
-        <div class="chips" style="margin-top:8px"><button class="small" id="spFind">Find speakers</button><button class="small" id="spLogout">Disconnect</button></div>
+        <div class="chips btnrow" style="margin-top:8px"><button class="small" id="spFind">Find speakers</button><button class="small" id="spLogout">Disconnect</button></div>
         <div class="hint">Open Spotify on this phone first so it shows up. For reliability set Spotify's battery use to <b>Unrestricted</b> (long-press the Spotify icon → App info → Battery). If Spotify doesn't start, it falls back to the chimes.</div>
       </div>
     </div>
@@ -341,7 +407,7 @@
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
 
   // ---------- Colour themes ----------
-  const THEMES = {
+  let THEMES = {
     sunrise:{ name:"Sunrise", swatch:"#ff9a4a",
       vars:{amber:"#ffb36b",acc2:"#ff8f3d",accInk:"#2a1205",setupGlow:"#3b1606",r1:"#fff6e3",r2:"#ffd9a1",r3:"#ffb46e",rInk:"#5a2c10",rSub:"#7a4520",rSub2:"#8a5530",rBtn:"#6a3412",rBtnText:"#fff1de",
             m1:"#fff4e2",m2:"#ffe3bd",m3:"#ffcf98",mInk:"#3d1f0c",mGreet:"#8a4e22",mSub:"#6a3a18",mLabel:"#9a5f33",mMuted:"#9a6a45",mBtn:"#5a2c10",nl1:"#b8571c",nl2:"#6a2a0c",nl3:"#1e0a03",nb1:"#f08a3c",nb2:"#a8461a",nb3:"#3a1406"},
@@ -373,10 +439,41 @@
       glow:[[0,"#000000"],[.2,"#121110"],[.45,"#4a4744"],[.7,"#b0aaa0"],[.88,"#f0eeea"],[1,"#ffffff"]],
       night:["#141312","#222120","#33312f","#4a4744","#66625d","#8a857f"], clockMid:"#f0ede8", clockHi:"#8a857f", clockEnd:"#2a2826" }
   };
+  (function addPhoneTheme(){
+    let c = null;
+    try { const j = NATIVE && NATIVE.systemColors ? NATIVE.systemColors() : ""; if (j) c = JSON.parse(j); } catch(e){}
+    if (!c) return;
+    const W = "#ffffff", K = "#000000";
+    THEMES = Object.assign({ phone:{ name:"Phone colours", swatch:c.a1_500,
+      vars:{amber:c.a1_200,acc2:c.a1_300,accInk:c.a1_800,setupGlow:c.a1_900,r1:mix(c.a1_100,W,.6),r2:c.a1_100,r3:c.a1_200,rInk:c.a1_900,rSub:c.a1_700,rSub2:c.a1_700,rBtn:c.a1_700,rBtnText:W,
+            m1:mix(c.a1_100,W,.7),m2:mix(c.a1_100,W,.4),m3:c.a1_100,mInk:c.n1_900,mGreet:c.a1_700,mSub:c.a1_800,mLabel:c.a1_700,mMuted:c.a2_700,mBtn:c.a1_700,
+            nl1:c.a1_500,nl2:c.a1_800,nl3:mix(K,c.a1_900,.5),nb1:c.a1_300,nb2:c.a1_700,nb3:c.a1_900},
+      sky:[[0,K],[.25,mix(K,c.a1_900,.35)],[.5,c.a1_900],[.7,c.a1_700],[.85,c.a1_300],[1,mix(c.a1_100,W,.6)]],
+      glow:[[0,K],[.15,c.a1_900],[.4,c.a1_700],[.65,c.a1_500],[.85,c.a1_200],[1,W]],
+      night:[.12,.2,.3,.42,.55,.7].map(f=>mix(K,c.a1_500,f)), clockMid:c.a1_100, clockHi:c.a1_500, clockEnd:c.a1_900 } }, THEMES);
+  })();
   function applyTheme(){
     const T = THEMES[S.theme] || THEMES.sunrise;
-    Object.entries(T.vars).forEach(([k,v])=>document.documentElement.style.setProperty("--"+k, v));
+    const set = (k,v) => document.documentElement.style.setProperty("--"+k, v);
+    Object.entries(T.vars).forEach(([k,v])=>set(k, v));
+    // Material 3 tones for the settings screen, tinted by the theme's colour
+    const P = T.vars.amber;
+    set("md-primary", P); set("md-on-primary", T.vars.accInk);
+    set("md-surface", mix("#0f0e0d", P, .04));
+    set("md-container", mix("#1d1b1a", P, .07));
+    set("md-container-high", mix("#272524", P, .09));
+    set("md-container-highest", mix("#322f2e", P, .1));
+    set("md-primary-container", mix("#000000", P, .32));
+    set("md-on-primary-container", mix(P, "#ffffff", .65));
+    set("md-secondary-container", mix("#2a2826", P, .28));
+    set("md-on-secondary-container", mix(P, "#ffffff", .75));
+    set("md-on-surface", "#e7e1de"); set("md-on-surface-var", mix("#cac4c0", P, .08));
+    set("md-outline", mix("#938f8b", P, .12)); set("md-outline-var", mix("#49454f", P, .1));
+    const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = mix("#0f0e0d", P, .04);
   }
+  // Material sliders show their filled part
+  function paintRange(r){ const pct = (r.value - r.min) / (r.max - r.min) * 100; r.style.setProperty("--fill", pct + "%"); }
+  document.querySelectorAll('#setup input[type=range]').forEach(r => { r.addEventListener("input", ()=>paintRange(r)); });
   Object.entries(THEMES).forEach(([k,T])=>{
     const b = document.createElement("button"); b.className = "theme"; b.dataset.v = k;
     b.innerHTML = `<i style="background:radial-gradient(circle at 50% 70%,${T.glow[4][1]},${T.swatch} 45%,${T.sky[2][1]} 100%)"></i>${T.name}`;
@@ -407,7 +504,7 @@
   chipGroup($("durChips"), [15,20,30,45], "dur", v=>`${v} min`);
   chipGroup($("snzChips"), [5,9,15], "snooze", v=>`${v}m`);
   chipGroup($("fadeChips"), [1,3,5], "fade", v=>`${v}m`);
-  chipGroup($("srcChips"), ["chimes","spotify","radio","songs"], "src", v=>({chimes:"Chimes",spotify:"Spotify",radio:"Radio stream",songs:"My songs"})[v]);
+  chipGroup($("srcChips"), ["chimes","spotify","radio","songs"], "src", v=>({chimes:"Chimes",spotify:"Spotify",radio:"Radio",songs:"My songs"})[v]);
   STATIONS.forEach(([n],i)=>{ const o=document.createElement("option"); o.value=i; o.textContent=n; $("station").appendChild(o); });
 
   $("autoTgl").onclick = () => { S.auto = !S.auto; save(); paint(); toast(S.auto ? "The app will open itself at sunrise" : "Tap Goodnight each night instead"); };
@@ -486,6 +583,7 @@
     $("customUrl").value = S.customUrl;
     $("todoToken").value = S.todoToken;
     $("vol").value = S.vol; $("dim").value = S.dim;
+    document.querySelectorAll('#setup input[type=range]').forEach(paintRange);
     $("locName").textContent = S.place;
     $("nextTxt").textContent = (S.days.length ? "" : "One-off · ") + describeAlarm(nextAlarm());
     $("willyLink").href = /^https:\/\/(www\.)?willyweather\.com\.au\//.test(S.willy) ? S.willy : "https://www.willyweather.com.au/";
@@ -857,8 +955,8 @@
   };
 
   // ---------- Colours ----------
-  const hex = h => [1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
-  const mix = (a,b,t) => { t=Math.max(0,Math.min(1,t)); const A=hex(a),B=hex(b); return "#"+A.map((v,i)=>Math.round(v+(B[i]-v)*t).toString(16).padStart(2,"0")).join(""); };
+  function hex(h){ return [1,3,5].map(i=>parseInt(h.slice(i,i+2),16)); }
+  function mix(a,b,t){ t=Math.max(0,Math.min(1,t)); const A=hex(a),B=hex(b); return "#"+A.map((v,i)=>Math.round(v+(B[i]-v)*t).toString(16).padStart(2,"0")).join(""); }
   function ramp(stops, p){ for (let i=1;i<stops.length;i++){ if (p<=stops[i][0]){ const [p0,c0]=stops[i-1],[p1,c1]=stops[i]; return mix(c0,c1,(p-p0)/(p1-p0||1)); } } return stops[stops.length-1][1]; }
   const root = document.documentElement.style;
   function setSunrise(p){
