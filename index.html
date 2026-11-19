@@ -235,6 +235,12 @@
   .st .tx small{display:block;font-size:13px;color:var(--md-on-surface-var);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .st button{height:36px;min-width:40px;padding:0 12px;border-radius:18px;background:var(--md-secondary-container);color:var(--md-on-secondary-container);font:500 14px "Roboto Flex",sans-serif;flex:none}
   .st button.on{background:var(--md-primary);color:var(--md-on-primary)}
+  .sunstrip{height:44px;border-radius:12px;margin:6px 0 12px}
+  .sunpick{display:flex;gap:10px}
+  .sunpick label{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:13px;color:var(--md-on-surface-var)}
+  .sunpick input[type=color]{width:100%;height:48px;border:1px solid var(--md-outline);border-radius:12px;background:transparent;padding:4px}
+  #sunCustom{display:none}
+  #sunCustom.on{display:block}
   .volhud{position:fixed;left:50%;top:24px;transform:translateX(-50%);z-index:20;background:rgba(20,16,14,.88);color:#f3e2d2;border-radius:24px;padding:10px 18px;font:500 15px "Roboto Flex",sans-serif;display:flex;align-items:center;gap:10px;opacity:0;transition:opacity .2s;pointer-events:none}
   .volhud.show{opacity:1}
   .volhud .bar{width:120px;height:6px;border-radius:3px;background:rgba(255,255,255,.2);overflow:hidden}
@@ -373,6 +379,21 @@
       <div class="themes" id="themes"></div>
     </div>
     <div class="card">
+      <label class="t">Sunrise colours</label>
+      <div class="row"><span>Choose my own</span><div class="toggle" id="sunCustomTgl"></div></div>
+      <div id="sunCustom">
+        <div class="sunstrip" id="sunStrip"></div>
+        <div class="sunpick">
+          <label><input type="color" id="sunC0"><span>Dawn</span></label>
+          <label><input type="color" id="sunC1"><span>Glow</span></label>
+          <label><input type="color" id="sunC2"><span>Daylight</span></label>
+        </div>
+        <div class="chips btnrow" id="sunPresets" style="margin-top:10px"></div>
+        <div class="chips btnrow" style="margin-top:8px"><button class="small" id="sunPreview">▶ Preview sunrise</button></div>
+      </div>
+      <div class="hint" id="sunThemeHint">Using the colour theme's sunrise. Turn on to pick your own.</div>
+    </div>
+    <div class="card">
       <label class="t">Overnight clock brightness</label>
       <input type="range" id="dim" min="1" max="6" value="2">
       <label class="t" style="margin-top:14px">Sunrise brightness</label>
@@ -483,6 +504,11 @@
     ["triple j Hottest", [AK+"2100183/triplejhottest/index.m3u8"]],
     ["Radio National", [AK+"2038327/rnvic/index.m3u8", MH+"3RNW/mp3/"]]
   ];
+  const SUN_PRESETS = [
+    ["Classic", ["#3a0d02","#ff7a26","#fff1d6"]], ["Pink dawn", ["#2a0622","#ff6f91","#fff0f3"]],
+    ["Golden", ["#2e1500","#ffb000","#fff6d8"]], ["Cool blue", ["#03162e","#4aa3df","#eef8ff"]],
+    ["Candlelight", ["#1f0700","#e0661c","#ffd9a8"]], ["Forest dawn", ["#0b1a06","#9acd32","#fbffe8"]]
+  ];
   // Full list = ABC presets, then stations you've added from search, then a custom link
   function stationList(){
     const mine = (S.myStations||[]).map(m => [m.name, [m.url], m]);
@@ -491,7 +517,7 @@
   const curStation = () => { const l = stationList(); return l[S.station] || l[0]; };
   const DEF = { time:"06:30", days:[1,2,3,4,5], dur:30, src:"chimes", station:0, customUrl:"", vol:70, fade:3, snooze:9, dim:2,
                 lat:-37.814, lon:144.963, place:"Melbourne", willy:"", todoToken:"", myStations:[],
-                spClient:"", spLink:"", spShuffle:true, spDevice:null, spSimple:false, sunMax:60, pauseUntil:"", perDay:false, dayTimes:{}, theme:"sunrise", auto:true, skip:0 };
+                spClient:"", spLink:"", spShuffle:true, spDevice:null, spSimple:false, sunMax:60, sunCustom:false, sunCols:["#3a0d02","#ff7a26","#fff1d6"], pauseUntil:"", perDay:false, dayTimes:{}, theme:"sunrise", auto:true, skip:0 };
   const NATIVE = (window.Android && typeof window.Android.schedule === "function") ? window.Android : null;
   // Spotify tokens are kept separately from settings
   let SPT = {};
@@ -638,6 +664,14 @@
   $("vol").oninput = e => { S.vol=+e.target.value; save(); };
   $("dim").oninput = e => { S.dim=+e.target.value; save(); };
   $("sunMax").oninput = e => { S.sunMax=+e.target.value; save(); };
+  $("sunCustomTgl").onclick = () => { S.sunCustom = !S.sunCustom; save(); paint(); };
+  ["sunC0","sunC1","sunC2"].forEach((id,i)=>{ $(id).oninput = e => { S.sunCols = S.sunCols.map((c,j)=> j===i ? e.target.value : c); save(); paintSunCustom(); }; });
+  SUN_PRESETS.forEach(([name, cols]) => {
+    const b = Object.assign(document.createElement("button"), { className:"small", textContent:name });
+    b.onclick = () => { S.sunCols = [...cols]; save(); paintSunCustom(); };
+    $("sunPresets").appendChild(b);
+  });
+  $("sunPreview").onclick = () => enterNight(true);
   $("willy").onchange = e => { S.willy = e.target.value.trim(); save(); paint(); };
   $("todoToken").onchange = e => { S.todoToken = e.target.value.trim(); save(); };
 
@@ -718,7 +752,7 @@
     document.querySelectorAll('#setup input[type=range]').forEach(paintRange);
     $("locName").textContent = S.place;
     $("nextTxt").textContent = nextText();
-    paintSummaries();
+    paintSummaries(); paintSunCustom();
     if (S.pauseUntil && S.pauseUntil < new Date().toLocaleDateString("en-CA")){ S.pauseUntil = ""; save(); }
     $("pauseUntil").value = S.pauseUntil;
     $("willyLink").href = /^https:\/\/(www\.)?willyweather\.com\.au\//.test(S.willy) ? S.willy : "https://www.willyweather.com.au/";
@@ -757,7 +791,7 @@
     const src = S.src==="radio" ? "📻 " + st : S.src==="songs" ? "♪ Your songs" :
                 S.src==="spotify" ? ("Spotify" + ((S.spSimple || !SPT.refresh) ? " (simple)" : " · connected")) : "Chimes";
     $("sumSound").textContent = `${src} · fade ${S.fade} min · max ${S.vol}%`;
-    $("sumLook").textContent = `${(THEMES[S.theme]||THEMES.sunrise).name} theme · sunrise ${S.sunMax}%`;
+    $("sumLook").textContent = `${(THEMES[S.theme]||THEMES.sunrise).name} theme · ${S.sunCustom ? "own sunrise colours" : "theme sunrise"} · ${S.sunMax}%`;
     $("sumMorning").textContent = `Weather for ${S.place}` + (S.todoToken ? " · Todoist on" : "");
   }
 
@@ -1271,13 +1305,30 @@
   function mix(a,b,t){ t=Math.max(0,Math.min(1,t)); const A=hex(a),B=hex(b); return "#"+A.map((v,i)=>Math.round(v+(B[i]-v)*t).toString(16).padStart(2,"0")).join(""); }
   function ramp(stops, p){ for (let i=1;i<stops.length;i++){ if (p<=stops[i][0]){ const [p0,c0]=stops[i-1],[p1,c1]=stops[i]; return mix(c0,c1,(p-p0)/(p1-p0||1)); } } return stops[stops.length-1][1]; }
   const root = document.documentElement.style;
+  function customSun(){
+    const [c0,c1,c2] = S.sunCols, K = "#000000", W = "#ffffff";
+    return {
+      sky:[[0,K],[.25,mix(K,c0,.35)],[.5,c0],[.7,mix(c0,c1,.6)],[.85,mix(c1,c2,.5)],[1,c2]],
+      glow:[[0,K],[.15,mix(K,c0,.7)],[.4,mix(c0,c1,.55)],[.65,c1],[.85,mix(c1,c2,.6)],[1,mix(c2,W,.5)]]
+    };
+  }
+  function sunRamps(T){ return S.sunCustom ? customSun() : { sky:T.sky, glow:T.glow }; }
+  function paintSunCustom(){
+    $("sunCustomTgl").classList.toggle("on", S.sunCustom);
+    $("sunCustom").classList.toggle("on", S.sunCustom);
+    $("sunThemeHint").style.display = S.sunCustom ? "none" : "";
+    ["sunC0","sunC1","sunC2"].forEach((id,i)=>$(id).value = S.sunCols[i]);
+    const r = sunRamps(THEMES[S.theme] || THEMES.sunrise).sky;
+    $("sunStrip").style.background = `linear-gradient(90deg,${r.map(([p,c])=>`${c} ${Math.round(p*100)}%`).join(",")})`;
+  }
   function setSunrise(pTime){
     const T = THEMES[S.theme] || THEMES.sunrise;
+    const R = sunRamps(T);
     const cap = (S.sunMax||60)/100;
     // Stay dim for most of the sunrise: colour follows a slow curve, and without backlight control
     // the brightness setting also limits how far towards white the colours go
     const p = Math.pow(pTime, 1.8) * (NATIVE ? 1 : (0.35 + 0.65*cap));
-    root.setProperty("--sky", ramp(T.sky,p)); root.setProperty("--glow", ramp(T.glow,p));
+    root.setProperty("--sky", ramp(R.sky,p)); root.setProperty("--glow", ramp(R.glow,p));
     root.setProperty("--sunY", (140 - p*95) + "%"); root.setProperty("--sunR", (20 + p*160) + "%");
     // In the Android app the backlight does the dimming, so the clock can use a clearer colour
     const base = NATIVE ? T.night[4] : T.night[S.dim-1];
