@@ -100,6 +100,17 @@
   #mDone{background:#5a2c10;color:#fff1de;margin-top:4px}
 
   .rleft{text-align:center}
+  #dayTimes{display:none;margin-top:6px}
+  #dayTimes.on{display:block}
+  .dt{display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-top:1px solid #241d1a}
+  .dt:first-child{border-top:0}
+  .dt span{font-size:16px;color:#e2cdb9}
+  .dt input{background:transparent;border:0;color:var(--ink);font:300 24px Outfit,sans-serif;color-scheme:dark;text-align:right;width:auto}
+  #nightLight{position:absolute;inset:0;display:none;align-items:flex-end;justify-content:center;padding-bottom:40px;
+    background:radial-gradient(75% 60% at 50% 55%,#b8571c 0%,#6a2a0c 45%,#1e0a03 100%);z-index:5}
+  #nightLight.on{display:flex}
+  #nightLight.bright{background:radial-gradient(85% 70% at 50% 55%,#f08a3c 0%,#a8461a 45%,#3a1406 100%)}
+  #nlNote{color:rgba(255,220,190,.55);font-size:15px;text-align:center;line-height:1.6}
   .mL,.mR{display:contents}
   #mDone{order:9}
   @media (orientation:landscape) and (max-height:600px){
@@ -131,6 +142,8 @@
   <div class="card">
     <label class="t">Repeat</label>
     <div class="chips days" id="days"></div>
+    <div class="row" style="margin-top:10px"><span>Different time each day</span><div class="toggle" id="perDayTgl"></div></div>
+    <div id="dayTimes"></div>
   </div>
 
   <div class="card">
@@ -216,7 +229,9 @@
     <div id="nClock">--:--</div>
     <div id="nInfo"></div>
   </div>
+  <div id="nightLight"><div id="nlNote">Tap anywhere to turn off</div></div>
   <div id="nControls">
+    <button id="nLight">💡 Night light</button>
     <button id="nSettings">Change alarm</button>
     <button id="nCancel">Turn off alarm</button>
   </div>
@@ -284,7 +299,7 @@
   ];
   const DEF = { time:"06:30", days:[1,2,3,4,5], dur:30, src:"chimes", station:0, customUrl:"", vol:70, fade:3, snooze:9, dim:2,
                 lat:-37.814, lon:144.963, place:"Melbourne", willy:"", todoToken:"",
-                spClient:"", spLink:"", spShuffle:true, spDevice:null };
+                spClient:"", spLink:"", spShuffle:true, spDevice:null, perDay:false, dayTimes:{} };
   // Spotify tokens are kept separately from settings
   let SPT = {};
   try { SPT = JSON.parse(localStorage.getItem("sunrise-spotify") || "{}"); } catch(e){}
@@ -315,6 +330,12 @@
   chipGroup($("srcChips"), ["chimes","spotify","radio","songs"], "src", v=>({chimes:"Chimes",spotify:"Spotify",radio:"Radio stream",songs:"My songs"})[v]);
   STATIONS.forEach(([n],i)=>{ const o=document.createElement("option"); o.value=i; o.textContent=n; $("station").appendChild(o); });
 
+  $("perDayTgl").onclick = () => {
+    if (!S.days.length) return toast("Pick some repeat days first");
+    S.perDay = !S.perDay;
+    if (S.perDay) S.days.forEach(d=>{ if (!S.dayTimes[d]) S.dayTimes[d] = S.time; });
+    save(); paint();
+  };
   $("alarmTime").onchange = e => { S.time = e.target.value || "06:30"; save(); paint(); };
   $("station").onchange = e => { S.station = +e.target.value; save(); paint(); };
   $("customUrl").onchange = e => { S.customUrl = e.target.value.trim(); save(); };
@@ -323,10 +344,12 @@
   $("willy").onchange = e => { S.willy = e.target.value.trim(); save(); paint(); };
   $("todoToken").onchange = e => { S.todoToken = e.target.value.trim(); save(); };
 
+  const timeFor = day => (S.perDay && S.days.length && S.dayTimes[day]) ? S.dayTimes[day] : S.time;
   function nextAlarm(from = new Date()){
-    const [h,m] = S.time.split(":").map(Number);
     for (let d=0; d<=7; d++){
-      const t = new Date(from); t.setDate(t.getDate()+d); t.setHours(h,m,0,0);
+      const t = new Date(from); t.setDate(t.getDate()+d);
+      const [h,m] = timeFor(t.getDay()).split(":").map(Number);
+      t.setHours(h,m,0,0);
       if (t <= from) continue;
       if (!S.days.length || S.days.includes(t.getDay())) return t;
     }
@@ -342,6 +365,20 @@
 
   function paint(){
     $("alarmTime").value = S.time;
+    const perDayOn = S.perDay && S.days.length > 0;
+    $("perDayTgl").classList.toggle("on", S.perDay);
+    $("dayTimes").classList.toggle("on", perDayOn);
+    $("alarmTime").parentElement.style.display = perDayOn ? "none" : "";
+    if (perDayOn){
+      const box = $("dayTimes"); box.innerHTML = "";
+      [1,2,3,4,5,6,0].filter(d=>S.days.includes(d)).forEach(d=>{
+        const row = document.createElement("div"); row.className = "dt";
+        const lab = document.createElement("span"); lab.textContent = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][d];
+        const inp = document.createElement("input"); inp.type = "time"; inp.value = S.dayTimes[d] || S.time;
+        inp.onchange = () => { S.dayTimes[d] = inp.value || S.time; save(); $("nextTxt").textContent = describeAlarm(nextAlarm()); };
+        row.append(lab, inp); box.appendChild(row);
+      });
+    }
     [...daysEl.children].forEach((b,i)=>b.classList.toggle("sel", S.days.includes(i)));
     const sel = (id,key) => [...$(id).children].forEach(b=>b.classList.toggle("sel", String(b.dataset.v)===String(S[key])));
     sel("durChips","dur"); sel("snzChips","snooze"); sel("fadeChips","fade"); sel("srcChips","src");
@@ -692,7 +729,7 @@
       $("nClock").textContent = fmt(now);
       $("nInfo").textContent = p>0 ? "Rise and shine…" : `⏰ ${fmtAP(alarmAt)}`;
       if (p===0 && now-lastShift > 120000){ lastShift = +now; $("clockWrap").style.transform = `translate(${(Math.random()*40-20)|0}px,${(Math.random()*60-30)|0}px)`; }
-      if (p>0){ $("clockWrap").style.transform = "none"; if (!wxFetchedAtSunrise){ wxFetchedAtSunrise = true; getWeather(true); } }
+      if (p>0){ if (nlLevel) nightLight(0); $("clockWrap").style.transform = "none"; if (!wxFetchedAtSunrise){ wxFetchedAtSunrise = true; getWeather(true); } }
       if (now >= alarmAt) enterRing();
     } else if (mode==="ring"){
       $("rClock").textContent = fmt(now);
@@ -778,8 +815,28 @@
     $("nControls").classList.add("show"); clearTimeout(ctlTimer);
     ctlTimer = setTimeout(()=>$("nControls").classList.remove("show"), 5000);
   });
-  $("nSettings").onclick = () => { mode="setup"; show("setup"); paint(); };
-  $("nCancel").onclick = () => { mode="setup"; show("setup"); paint(); toast("Alarm off"); };
+  let nlTimer = null, nlLevel = 0;
+  function nightLight(level){
+    nlLevel = level; clearTimeout(nlTimer);
+    $("nightLight").classList.toggle("on", level>0);
+    $("nightLight").classList.toggle("bright", level===2);
+    $("nControls").classList.remove("show");
+    if (level>0){
+      $("nlNote").innerHTML = (level===1 ? "Double-tap for brighter · " : "") + "Tap to turn off<br>Turns off by itself in 10 min";
+      nlTimer = setTimeout(()=>nightLight(0), 10*60000);
+    }
+  }
+  $("nLight").onclick = e => { e.stopPropagation(); nightLight(1); };
+  let nlLastTap = 0, nlTapTimer = null;
+  $("nightLight").addEventListener("click", e => {
+    e.stopPropagation();
+    const now = Date.now();
+    if (now - nlLastTap < 350){ clearTimeout(nlTapTimer); nlLastTap = 0; nightLight(nlLevel===1 ? 2 : 1); return; }
+    nlLastTap = now;
+    nlTapTimer = setTimeout(()=>nightLight(0), 360);
+  });
+  $("nSettings").onclick = () => { nightLight(0); mode="setup"; show("setup"); paint(); };
+  $("nCancel").onclick = () => { nightLight(0); mode="setup"; show("setup"); paint(); toast("Alarm off"); };
   $("goodnight").onclick = () => enterNight(false);
   $("preview").onclick = () => enterNight(true);
 
