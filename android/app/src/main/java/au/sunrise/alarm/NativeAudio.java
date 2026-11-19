@@ -63,14 +63,17 @@ final class NativeAudio {
 
     // ---------- Spotify ----------
     /** Sends a "play" button press straight to Spotify (not to whatever app played last, like YouTube). */
-    boolean spotifyKey(int keyCode) {
+    boolean spotifyKey(int keyCode) { return appKey("com.spotify.music", keyCode); }
+
+    /** Sends a media button press to one specific app (e.g. YouTube Music), not whichever app played last. */
+    boolean appKey(String pkg, int keyCode) {
         try {
-            ctx.getPackageManager().getPackageInfo("com.spotify.music", 0);
+            ctx.getPackageManager().getPackageInfo(pkg, 0);
         } catch (Exception notInstalled) { return false; }
         long t = SystemClock.uptimeMillis();
         for (int action : new int[]{KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP}) {
             Intent i = new Intent(Intent.ACTION_MEDIA_BUTTON)
-                    .setPackage("com.spotify.music")
+                    .setPackage(pkg)
                     .putExtra(Intent.EXTRA_KEY_EVENT, new KeyEvent(t, t, action, keyCode, 0));
             ctx.sendOrderedBroadcast(i, null);
         }

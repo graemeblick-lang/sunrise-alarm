@@ -42,6 +42,7 @@ public class MainActivity extends Activity {
 
     private WebView web;
     private NativeAudio audio;
+    private SpotifyRemote spotify;
     private volatile boolean captureVolume = false;
     private GeolocationPermissions.Callback geoCallback;
     private String geoOrigin;
@@ -71,9 +72,8 @@ public class MainActivity extends Activity {
 
         web = new WebView(this);
         web.setBackgroundColor(0xFF000000);
-        audio = new NativeAudio(this, ev -> runOnUiThread(() -> {
-            if (web != null) web.evaluateJavascript("window.nativeAudioEvent && window.nativeAudioEvent('" + ev + "')", null);
-        }));
+        audio = new NativeAudio(this, this::sendAudioEvent);
+        spotify = new SpotifyRemote(this::sendAudioEvent);
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
@@ -137,6 +137,12 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void sendAudioEvent(String ev) {
+        runOnUiThread(() -> {
+            if (web != null) web.evaluateJavascript("window.nativeAudioEvent && window.nativeAudioEvent('" + ev.replace("'", "") + "')", null);
+        });
+    }
+
     @Override
     public boolean onKeyDown(int keyCode, android.view.KeyEvent event) {
         boolean up = keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP, down = keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN;
@@ -156,6 +162,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         if (audio != null) { audio.radioStop(); audio.musicRestore(); }
+        if (spotify != null) spotify.disconnect();
         super.onDestroy();
     }
 
@@ -252,6 +259,37 @@ public class MainActivity extends Activity {
             }
             return sb.append('}').toString();
         }
+
+        // ----- any music app -----
+        /** Installed apps that accept play/pause buttons, as JSON [{pkg,label}]. */
+        @JavascriptInterface public String listMusicApps() {
+            android.content.pm.PackageManager pm = getPackageManager();
+            java.util.List<android.content.pm.ResolveInfo> found = pm.queryBroadcastReceivers(new Intent(Intent.ACTION_MEDIA_BUTTON), 0);
+            java.util.LinkedHashMap<String, String> apps = new java.util.LinkedHashMap<>();
+            for (android.content.pm.ResolveInfo r : found) {
+                String pkg = r.activityInfo.packageName;
+                if (pkg.equals(getPackageName()) || apps.containsKey(pkg)) continue;
+                try { apps.put(pkg, pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()); } catch (Exception ignored) { }
+            }
+            StringBuilder sb = new StringBuilder("[");
+            for (java.util.Map.Entry<String, String> e : apps.entrySet()) {
+                if (sb.length() > 1) sb.append(',');
+                sb.append("{\"pkg\":\"").append(e.getKey()).append("\",\"label\":\"").append(e.getValue().replace("\"", "")).append("\"}");
+            }
+            return sb.append(']').toString();
+        }
+        @JavascriptInterface public boolean appWake(String pkg) { audio.musicFadeStart(); return audio.appKey(pkg, android.view.KeyEvent.KEYCODE_MEDIA_PLAY); }
+        @JavascriptInterface public void appPause(String pkg) { audio.appKey(pkg, android.view.KeyEvent.KEYCODE_MEDIA_PAUSE); }
+        @JavascriptInterface public void musicFadeStart() { audio.musicFadeStart(); }
+
+        // ----- Spotify app (official App Remote SDK) -----
+        @JavascriptInterface public void spotifyRemoteAuth(String clientId) {
+            runOnUiThread(() -> spotify.connect(getApplicationContext(), clientId, true, null, false));
+        }
+        @JavascriptInterface public void spotifyRemote(String clientId, String uri, boolean shuffle) {
+            runOnUiThread(() -> spotify.connect(getApplicationContext(), clientId, false, uri, shuffle));
+        }
+        @JavascriptInterface public void spotifyRemotePause() { runOnUiThread(() -> spotify.pause()); }
 
         /** While the alarm's music plays, the phone's volume buttons control it. */
         @JavascriptInterface public void captureVolumeKeys(boolean on) { captureVolume = on; }

@@ -42,3 +42,9 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
 }
+
+dependencies {
+    // Spotify's official App Remote SDK (from github.com/spotify/android-sdk, Apache 2.0)
+    implementation files("libs/spotify-app-remote-release-0.8.0.aar")
+    implementation "com.google.code.gson:gson:2.10.1"
+}

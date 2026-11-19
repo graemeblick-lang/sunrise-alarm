@@ -241,6 +241,14 @@
   .sunpick input[type=color]{width:100%;height:48px;border:1px solid var(--md-outline);border-radius:12px;background:transparent;padding:4px}
   #sunCustom{display:none}
   #sunCustom.on{display:block}
+  .spbox{border:1px solid var(--md-outline-var);border-radius:16px;padding:12px 14px;margin-top:12px}
+  .spbox b{font-weight:500}
+  .pill{font-size:12px;padding:4px 10px;border-radius:12px;background:var(--md-container-highest);color:var(--md-on-surface-var);white-space:nowrap}
+  .pill.ok{background:var(--md-primary);color:var(--md-on-primary)}
+  .kv{display:flex;flex-direction:column;margin-top:8px}
+  .kv small{font-size:12px;color:var(--md-on-surface-var)}
+  #setup code{font:13px/18px ui-monospace,monospace;color:var(--md-on-surface);user-select:text;-webkit-user-select:text;word-break:break-all;background:var(--md-container-high);padding:4px 8px;border-radius:6px;display:inline-block;margin-top:2px}
+  #spPlaylistBox{margin-top:12px}
   .volhud{position:fixed;left:50%;top:24px;transform:translateX(-50%);z-index:20;background:rgba(20,16,14,.88);color:#f3e2d2;border-radius:24px;padding:10px 18px;font:500 15px "Roboto Flex",sans-serif;display:flex;align-items:center;gap:10px;opacity:0;transition:opacity .2s;pointer-events:none}
   .volhud.show{opacity:1}
   .volhud .bar{width:120px;height:6px;border-radius:3px;background:rgba(255,255,255,.2);overflow:hidden}
@@ -327,23 +335,44 @@
 
       <div class="sub-panel" id="spotifyPanel">
         <div id="spSimpleRow">
-          <div class="row"><span>Simple mode (no login)</span><div class="toggle" id="spSimpleTgl"></div></div>
-          <div class="hint" style="margin:0 0 10px">Presses play in the Spotify app and fades it in, so it plays whatever you last had on. Queue your wake-up playlist in Spotify before bed. Also used automatically as a backup if the connected mode can't start.</div>
+          <div class="row"><span>Simple mode (no setup)</span><div class="toggle" id="spSimpleTgl"></div></div>
+          <div class="hint" style="margin:0 0 10px">Presses play in the Spotify app and fades it in, so it plays whatever you last had on. Also the automatic backup if a connection can't start.</div>
         </div>
-        <div id="spState" class="hint" style="margin-top:0"></div>
-        <div id="spSetup">
-          <input type="text" id="spClient" placeholder="Spotify Client ID" autocomplete="off">
-          <div class="hint">Redirect URI to paste into Spotify: <b id="spRedirect" style="user-select:text;color:#e8c9a8;font-weight:400"></b></div>
-          <div class="chips btnrow" style="margin-top:8px"><button class="small" id="spConnect">Connect Spotify</button></div>
+        <div id="spFull">
+          <input type="text" id="spClient" placeholder="Spotify Client ID" autocomplete="off" style="margin-top:0">
+
+          <div id="spAppBox" class="spbox">
+            <div class="row"><span><b>Spotify app connection</b> · best</span><span id="spAppState" class="pill"></span></div>
+            <div class="hint">Plays your chosen playlist through the Spotify app on this phone. One-time setup in your Spotify developer app → <b>Settings → Edit</b>:</div>
+            <div class="kv"><small>Android package</small><code id="kvPkg">au.sunrise.alarm</code></div>
+            <div class="kv"><small>SHA-1 fingerprint</small><code id="kvSha">A0:00:4D:EE:71:42:49:C6:EB:0C:CF:24:2D:20:5D:3C:1B:94:D0:4A</code></div>
+            <div class="kv"><small>Redirect URI (add as well)</small><code id="kvRedir">au.sunrise.alarm://spotify-callback</code></div>
+            <div class="chips btnrow" style="margin-top:8px"><button class="small" id="spAppConnect">Connect with Spotify app</button></div>
+          </div>
+
+          <div id="spWebBox" class="spbox">
+            <div class="row"><span><b>Internet connection</b><span id="spWebSub"> · backup</span></span><span id="spWebState" class="pill"></span></div>
+            <div id="spSetup">
+              <div class="hint">Redirect URI to add in Spotify: <code id="spRedirect"></code></div>
+              <div class="chips btnrow" style="margin-top:8px"><button class="small" id="spConnect">Connect over the internet</button></div>
+            </div>
+            <div id="spReady">
+              <div style="font-size:14px;color:var(--md-on-surface-var);margin-top:4px">Play on</div>
+              <div class="chips" id="spDevices" style="margin-top:6px"></div>
+              <div class="chips btnrow" style="margin-top:8px"><button class="small" id="spFind">Find speakers</button><button class="small" id="spLogout">Disconnect</button></div>
+            </div>
+          </div>
+
+          <div id="spPlaylistBox">
+            <input type="url" id="spLink" placeholder="Paste a Spotify playlist, album or song link">
+            <div class="row"><span>Shuffle</span><div class="toggle" id="spShuffle"></div></div>
+          </div>
         </div>
-        <div id="spReady">
-          <input type="url" id="spLink" placeholder="Paste a Spotify playlist, album or song link">
-          <div class="row"><span>Shuffle</span><div class="toggle" id="spShuffle"></div></div>
-          <div style="font-size:14px;color:var(--muted);margin-top:4px">Play on</div>
-          <div class="chips" id="spDevices" style="margin-top:6px"></div>
-          <div class="chips btnrow" style="margin-top:8px"><button class="small" id="spFind">Find speakers</button><button class="small" id="spLogout">Disconnect</button></div>
-          <div class="hint">Open Spotify on this phone first so it shows up. For reliability set Spotify's battery use to <b>Unrestricted</b> (long-press the Spotify icon → App info → Battery). If Spotify doesn't start, it falls back to the chimes.</div>
-        </div>
+      </div>
+
+      <div class="sub-panel" id="appsPanel">
+        <select id="musicApp"></select>
+        <div class="hint">Presses play in that app and fades it in, so it plays whatever you last had on there. Queue your wake-up music in the app before bed. If nothing plays, the chimes take over.</div>
       </div>
 
       <div class="row" style="margin-top:10px"><button class="small" id="testSound">▶ Test sound</button><span id="testState" class="hint" style="margin:0"></span></div>
@@ -353,6 +382,11 @@
         <input type="range" id="vol" min="10" max="100" value="70">
       </div>
       <div class="row"><span>Fade in over</span><div class="chips" id="fadeChips"></div></div>
+    </div>
+    <div class="card">
+      <label class="t">Music before the alarm</label>
+      <div class="chips" id="earlyChips"></div>
+      <div class="hint" id="earlyHint" style="margin-top:8px">Starts your music quietly before alarm time, then fades it up when the alarm goes off. You can still start it any time by tapping the screen.</div>
     </div>
   </div>
 
@@ -517,7 +551,7 @@
   const curStation = () => { const l = stationList(); return l[S.station] || l[0]; };
   const DEF = { time:"06:30", days:[1,2,3,4,5], dur:30, src:"chimes", station:0, customUrl:"", vol:70, fade:3, snooze:9, dim:2,
                 lat:-37.814, lon:144.963, place:"Melbourne", willy:"", todoToken:"", myStations:[],
-                spClient:"", spLink:"", spShuffle:true, spDevice:null, spSimple:false, sunMax:60, sunCustom:false, sunCols:["#3a0d02","#ff7a26","#fff1d6"], pauseUntil:"", perDay:false, dayTimes:{}, theme:"sunrise", auto:true, skip:0 };
+                spClient:"", spLink:"", spShuffle:true, spDevice:null, spSimple:false, spAppOk:false, appPkg:"", appName:"", earlyMin:0, sunMax:60, sunCustom:false, sunCols:["#3a0d02","#ff7a26","#fff1d6"], pauseUntil:"", perDay:false, dayTimes:{}, theme:"sunrise", auto:true, skip:0 };
   const NATIVE = (window.Android && typeof window.Android.schedule === "function") ? window.Android : null;
   // Spotify tokens are kept separately from settings
   let SPT = {};
@@ -635,7 +669,18 @@
   chipGroup($("durChips"), [15,20,30,45], "dur", v=>`${v} min`);
   chipGroup($("snzChips"), [5,9,15], "snooze", v=>`${v}m`);
   chipGroup($("fadeChips"), [1,3,5], "fade", v=>`${v}m`);
-  chipGroup($("srcChips"), ["chimes","spotify","radio","songs"], "src", v=>({chimes:"Chimes",spotify:"Spotify",radio:"Radio",songs:"My songs"})[v]);
+  chipGroup($("srcChips"), ["chimes","radio","spotify","songs","apps"], "src", v=>({chimes:"Chimes",spotify:"Spotify",radio:"Radio",songs:"Songs",apps:"Apps"})[v]);
+  const HAS_APPS = !!(NATIVE && typeof NATIVE.listMusicApps === "function");
+  if (!HAS_APPS) $("srcChips").querySelector('[data-v="apps"]').remove();
+  chipGroup($("earlyChips"), [0,5,10,15], "earlyMin", v=> v ? `${v} min` : "Off");
+  let musicApps = null;
+  function loadMusicApps(){
+    if (!HAS_APPS) return [];
+    if (!musicApps){ try { musicApps = JSON.parse(NATIVE.listMusicApps()) || []; } catch(e){ musicApps = []; }
+      musicApps.sort((a,b)=>a.label.localeCompare(b.label)); }
+    return musicApps;
+  }
+  $("musicApp").onchange = e => { const a = loadMusicApps().find(x=>x.pkg===e.target.value); S.appPkg = a ? a.pkg : ""; S.appName = a ? a.label : ""; save(); paint(); };
   function renderStationSelect(){
     const sel = $("station"); sel.innerHTML = "";
     const l = stationList(), nPre = STATIONS.length, nMine = (S.myStations||[]).length;
@@ -729,15 +774,31 @@
     $("radioPanel").classList.toggle("on", S.src==="radio");
     $("songsPanel").classList.toggle("on", S.src==="songs");
     $("spotifyPanel").classList.toggle("on", S.src==="spotify");
+    if (S.src==="apps" && !HAS_APPS) S.src = "chimes";
+    $("appsPanel").classList.toggle("on", S.src==="apps");
+    if (S.src==="apps"){
+      const sel = $("musicApp"), apps = loadMusicApps();
+      if (sel.options.length !== apps.length + 1){
+        sel.innerHTML = '<option value="">Choose an app…</option>' + apps.map(a=>`<option value="${a.pkg}"></option>`).join("");
+        apps.forEach((a,i)=> sel.options[i+1].textContent = a.label);
+      }
+      sel.value = S.appPkg;
+    }
+    [...$("earlyChips").children].forEach(b=>b.classList.toggle("sel", +b.dataset.v === +S.earlyMin));
+    $("earlyHint").style.display = S.src==="chimes" ? "none" : "";
     const spOn = !!SPT.refresh;
     const simpleOK = !!(NATIVE && typeof NATIVE.spotifyWake === "function");
     $("spSimpleRow").style.display = simpleOK ? "" : "none";
     $("spSimpleTgl").classList.toggle("on", simpleOK && S.spSimple);
     const simpleOn = simpleOK && S.spSimple;
-    $("spSetup").style.display = (spOn || simpleOn) ? "none" : "";
-    $("spReady").style.display = (spOn && !simpleOn) ? "" : "none";
-    $("spState").style.display = simpleOn ? "none" : "";
-    $("spState").textContent = spOn ? "✓ Spotify connected" + (S.spDevice ? ` · plays on ${S.spDevice.name}` : " · pick a speaker below") : "Needs Spotify Premium and a one-time setup.";
+    const hasRemote = !!(NATIVE && typeof NATIVE.spotifyRemote === "function");
+    $("spFull").style.display = simpleOn ? "none" : "";
+    $("spAppBox").style.display = hasRemote ? "" : "none";
+    $("spWebSub").style.display = hasRemote ? "" : "none";
+    $("spAppState").textContent = S.spAppOk ? "✓ Connected" : "Not set up"; $("spAppState").classList.toggle("ok", !!S.spAppOk);
+    $("spWebState").textContent = spOn ? "✓ Connected" : "Not set up"; $("spWebState").classList.toggle("ok", spOn);
+    $("spSetup").style.display = spOn ? "none" : "";
+    $("spReady").style.display = spOn ? "" : "none";
     $("spRedirect").textContent = SP.redirect();
     $("spClient").value = S.spClient; $("spLink").value = S.spLink;
     $("spShuffle").classList.toggle("on", S.spShuffle);
@@ -789,8 +850,9 @@
     $("sumAlarm").textContent = (paused ? "Paused · " : "") + daysText() + (S.perDay ? " (own times)" : "") + ` · sunrise ${S.dur} min · snooze ${S.snooze} min`;
     const st = curStation()[0].replace("…","");
     const src = S.src==="radio" ? "📻 " + st : S.src==="songs" ? "♪ Your songs" :
-                S.src==="spotify" ? ("Spotify" + ((S.spSimple || !SPT.refresh) ? " (simple)" : " · connected")) : "Chimes";
-    $("sumSound").textContent = `${src} · fade ${S.fade} min · max ${S.vol}%`;
+                S.src==="spotify" ? ("Spotify" + (S.spSimple ? " (simple)" : (S.spAppOk || SPT.refresh) ? " · connected" : " (simple)")) :
+                S.src==="apps" ? "🎵 " + (S.appName || "Choose a music app") : "Chimes";
+    $("sumSound").textContent = `${src} · fade ${S.fade} min` + (S.earlyMin && S.src!=="chimes" ? ` · starts ${S.earlyMin} min early` : "");
     $("sumLook").textContent = `${(THEMES[S.theme]||THEMES.sunrise).name} theme · ${S.sunCustom ? "own sunrise colours" : "theme sunrise"} · ${S.sunMax}%`;
     $("sumMorning").textContent = `Weather for ${S.place}` + (S.todoToken ? " · Todoist on" : "");
   }
@@ -1107,6 +1169,7 @@
   const NATIVE_RADIO = !!(NATIVE && typeof NATIVE.radioPlay === "function");
   let nativeWaiter = null, nativeRadioOn = false;
   window.nativeAudioEvent = ev => {
+    if (ev.startsWith("sr:")){ handleSr(ev); return; }
     if (nativeWaiter){ const w = nativeWaiter; nativeWaiter = null; ev === "playing" ? w.resolve() : w.reject(ev); return; }
     if (nativeRadioOn && using === "radio" && (ev === "error" || ev === "ended")) fallBack(`${curStation()[0]} dropped out, so playing chimes`);
   };
@@ -1181,27 +1244,78 @@
   let spNativeFade = false;
   const sleep = ms => new Promise(r=>setTimeout(r, ms));
   const musicPlaying = () => { try { return !!(NATIVE && NATIVE.musicActive && NATIVE.musicActive()); } catch(e){ return false; } };
-  // No-login mode: press play in the Spotify app, fade the phone's media volume up, and check sound really started
-  async function startSpotifySimple(already){
-    using = "spotify";
-    $("rNow").textContent = "Starting Spotify…";
-    if (!already){ let ok = false; try { ok = NATIVE.spotifyWake(); } catch(e){} if (!ok) return spotifyFail("Spotify isn't installed"); spNativeFade = true; }
+  // Simple mode: press play in one specific app (Spotify, YouTube Music…), fade the phone's media volume up,
+  // and check that sound really started
+  let simplePkg = "com.spotify.music";
+  function pressPause(){ try { NATIVE.appPause ? NATIVE.appPause(simplePkg) : NATIVE.spotifyPause(); } catch(e){} }
+  async function startSimple(kind, pkg, name, already){
+    using = kind; simplePkg = pkg;
+    $("rNow").textContent = `Starting ${name}…`;
+    if (!already){
+      let ok = false;
+      try { ok = NATIVE.appWake ? NATIVE.appWake(pkg) : NATIVE.spotifyWake(); } catch(e){}
+      if (!ok) return simpleFail(kind, `${name} isn't installed`);
+      spNativeFade = true;
+    }
     for (let i = 0; i < 8; i++){
-      if (using !== "spotify") return;
-      if (musicPlaying()){ $("rNow").textContent = "🎵 Spotify (what you last played)"; return; }
+      if (using !== kind) return;
+      if (musicPlaying()){ $("rNow").textContent = `🎵 ${name} (what you last played)`; return; }
       await sleep(1000);
     }
-    spotifyFail("Spotify didn't start");
+    simpleFail(kind, `${name} didn't start`);
   }
-  function spotifyFail(why){
-    if (using !== "spotify") return;
+  const startSpotifySimple = already => startSimple("spotify", "com.spotify.music", "Spotify", already);
+  function simpleFail(kind, why){
+    if (using !== kind) return;
     if (mode==="morning"){ stopSound(); paintMorningMusic(); return; }
-    if (spNativeFade){ try { NATIVE.spotifyPause(); NATIVE.musicRestore(); } catch(e){} spNativeFade = false; }
-    using = "spotify-failed"; startChimes(); $("rNow").textContent = why + ", so playing chimes";
+    if (spNativeFade){ pressPause(); try { NATIVE.musicRestore(); } catch(e){} spNativeFade = false; }
+    using = kind + "-failed"; startChimes(); $("rNow").textContent = why + ", so playing chimes";
   }
+  const spotifyFail = why => simpleFail("spotify", why);
+
+  // Spotify app connection (official App Remote SDK, Android app only)
+  let srWaiter = null, srAuth = null, spRemote = false;
+  const SR_MSG = { CouldNotFindSpotifyApp:"The Spotify app isn't installed", NotLoggedInException:"Log in to the Spotify app first",
+    UserNotAuthorizedException:"Spotify said no: check the Android package, SHA-1 and redirect URI in your Spotify developer app",
+    AuthenticationFailedException:"Spotify said no: check the Android package, SHA-1 and redirect URI in your Spotify developer app",
+    OfflineModeException:"Spotify is in offline mode", UnsupportedFeatureVersionException:"Update the Spotify app" };
+  function handleSr(ev){
+    const err = ev.startsWith("sr:error:") ? ev.slice(9) : null;
+    if (srWaiter){ srWaiter(!err && ev === "sr:playing"); }
+    if (srAuth){ const a = srAuth; srAuth = null; a(err); }
+  }
+  function remotePlay(uri){
+    return new Promise(res => {
+      const t = setTimeout(()=>{ srWaiter = null; res(false); }, 15000);
+      srWaiter = ok => { clearTimeout(t); srWaiter = null; res(ok); };
+      try { NATIVE.spotifyRemote(S.spClient, uri, !!S.spShuffle); } catch(e){ srWaiter(false); }
+    });
+  }
+  $("spAppConnect").onclick = () => {
+    S.spClient = $("spClient").value.trim(); save();
+    if (!S.spClient) return toast("Paste your Spotify Client ID first");
+    $("spAppState").textContent = "Connecting…";
+    const t = setTimeout(()=>{ if (srAuth){ srAuth = null; toast("No answer from Spotify. Open the Spotify app and try again."); paint(); } }, 45000);
+    srAuth = err => { clearTimeout(t);
+      if (err){ S.spAppOk = false; save(); paint(); toast(SR_MSG[err] || `Spotify couldn't connect (${err})`); }
+      else { S.spAppOk = true; S.src = "spotify"; save(); paint(); toast("Connected to the Spotify app"); }
+    };
+    try { NATIVE.spotifyRemoteAuth(S.spClient); } catch(e){ srAuth = null; toast("This needs the latest Android app"); }
+  };
   async function startSpotify(){
-    using = "spotify"; spDev = null; spLastVol = -1; spNativeFade = false;
-    if (NATIVE_SP && (S.spSimple || !SPT.refresh)) return startSpotifySimple(false);
+    using = "spotify"; spDev = null; spLastVol = -1; spNativeFade = false; spRemote = false;
+    if (NATIVE_SP && S.spSimple) return startSpotifySimple(false);
+    // 1) Spotify app connection: start the chosen playlist directly
+    const link = SP.parseLink(S.spLink);
+    if (S.spAppOk && S.spClient && link && NATIVE && NATIVE.spotifyRemote){
+      $("rNow").textContent = "Starting Spotify…";
+      try { NATIVE.musicFadeStart(); spNativeFade = true; } catch(e){}
+      const ok = await remotePlay(link.context_uri || link.uris[0]);
+      if (using !== "spotify") return;
+      if (ok){ spRemote = true; simplePkg = "com.spotify.music"; $("rNow").textContent = "🎵 Spotify"; return; }
+    }
+    // 2) No internet connection set up: simple mode
+    if (NATIVE_SP && !SPT.refresh) return startSpotifySimple(false);
     $("rNow").textContent = "Starting Spotify…";
     const body = SP.parseLink(S.spLink);
     try {
@@ -1242,7 +1356,9 @@
 
   function startSound(){
     ringStart = Date.now(); userVol = false; captureKeys(true);
-    if (S.src==="radio") startRadio(); else if (S.src==="songs") startSongs(); else if (S.src==="spotify") startSpotify(); else startChimes();
+    if (S.src==="radio") startRadio(); else if (S.src==="songs") startSongs(); else if (S.src==="spotify") startSpotify();
+    else if (S.src==="apps"){ if (S.appPkg && HAS_APPS) startSimple("app", S.appPkg, S.appName || "Music app", false); else { startChimes(); $("rNow").textContent = "No music app chosen, so playing chimes"; } }
+    else startChimes();
     rampVolume();
   }
   function stopSound(){
@@ -1250,10 +1366,11 @@
     clearInterval(chimeTimer); chimeTimer = null;
     if (master && ac) master.gain.setTargetAtTime(0, ac.currentTime, 0.2);
     if (spDev){ SP.api("PUT", `/me/player/pause?device_id=${spDev}`).catch(()=>{}); spDev = null; }
-    if (spNativeFade){ try { NATIVE.spotifyPause(); NATIVE.musicRestore(); } catch(e){} spNativeFade = false; }
+    if (spRemote){ try { NATIVE.spotifyRemotePause(); } catch(e){} spRemote = false; }
+    if (spNativeFade){ pressPause(); try { NATIVE.musicRestore(); } catch(e){} spNativeFade = false; }
     stopPlayer(); using = null;
   }
-  let earlyPlay = false;
+  let earlyPlay = false, earlyStopped = false;
   function rampVolume(){
     if (!using || userVol) return;
     let frac = Math.min(1, 0.06 + (Date.now()-ringStart)/(S.fade*60000));
@@ -1277,7 +1394,7 @@
   function applyVol(v){
     curVol = v;
     if (using==="chimes"){ if (master && ac) master.gain.setTargetAtTime(v, ac.currentTime, 0.5); }
-    else if (using==="spotify" && spNativeFade){ try { NATIVE.musicVolume(Math.max(0.07, v)); } catch(e){} }
+    else if ((using==="spotify" || using==="app") && spNativeFade){ try { NATIVE.musicVolume(Math.max(0.07, v)); } catch(e){} }
     else if (using==="spotify"){
       // Spotify volume is set over the internet, so step it every 10 s rather than every second
       const pct = Math.round(Math.max(5, v*100));
@@ -1358,7 +1475,7 @@
       if (!alarmAt){ toast("Pick a time first"); return; }
       sunriseStart = new Date(alarmAt.getTime() - S.dur*60000);
     }
-    wxFetchedAtSunrise = false;
+    wxFetchedAtSunrise = false; earlyStopped = false;
     if (!preview){ try { localStorage.setItem("sunrise-armed", JSON.stringify({ alarmAt:+alarmAt, sunriseStart:+sunriseStart })); } catch(e){} }
     if (S.src==="spotify") SP.findDevice().then(d=>{ if (!d) toast("Spotify can't see your speaker. Open Spotify once, or it'll use the chimes."); }).catch(()=>toast("Couldn't reach Spotify. It'll use the chimes if needed."));
     initAudio(); grabWake().then(statusText);
@@ -1375,6 +1492,9 @@
       $("nInfo").textContent = p>0 ? "Rise and shine…" : `⏰ ${fmtAP(alarmAt)}`;
       if (p===0 && now-lastShift > 120000){ lastShift = +now; $("clockWrap").style.transform = `translate(${(Math.random()*40-20)|0}px,${(Math.random()*60-30)|0}px)`; }
       if (p>0){ if (nlLevel) nightLight(0); $("clockWrap").style.transform = "none"; if (!wxFetchedAtSunrise){ wxFetchedAtSunrise = true; getWeather(true); } }
+      if (!preview && S.earlyMin && S.src !== "chimes" && !using && !earlyStopped && now < alarmAt && now >= alarmAt - S.earlyMin*60000){
+        earlyPlay = true; startSound();
+      }
       if (using) rampVolume();
       if (now >= alarmAt) enterRing();
     } else if (mode==="ring"){
@@ -1424,11 +1544,11 @@
   }
   function disarm(){ try { localStorage.removeItem("sunrise-armed"); } catch(e){} }
   let morningSince = 0;
-  const musicOn = () => ["radio","songs","spotify"].includes(using);
+  const musicOn = () => ["radio","songs","spotify","app"].includes(using);
   function paintMorningMusic(){
     const on = musicOn();
     $("mMusic").style.display = on ? "" : "none";
-    if (on) $("mmName").textContent = $("rNow").textContent || (using==="radio" ? "📻 Radio" : using==="spotify" ? "🎵 Spotify" : "♪ Your songs");
+    if (on) $("mmName").textContent = $("rNow").textContent || (using==="radio" ? "📻 Radio" : using==="spotify" ? "🎵 Spotify" : using==="app" ? "🎵 " + (S.appName||"Music") : "♪ Your songs");
   }
   function enterMorning(keepMusic){
     if (!(keepMusic && musicOn())) stopSound();
@@ -1503,14 +1623,14 @@
     nlLastTap = now;
     nlTapTimer = setTimeout(()=>nightLight(0), 360);
   });
-  const playLabel = () => ({radio:"▶ Play radio", spotify:"▶ Play Spotify", songs:"▶ Play my songs"})[S.src] || "▶ Play chimes";
+  const playLabel = () => ({radio:"▶ Play radio", spotify:"▶ Play Spotify", songs:"▶ Play my songs", apps:`▶ Play ${S.appName || "music"}`})[S.src] || "▶ Play chimes";
   function paintNightControls(){
     $("nPlay").textContent = earlyPlay && using ? "■ Stop music" : playLabel();
     $("nPlay").style.display = S.src === "chimes" ? "none" : "";
   }
   $("nPlay").onclick = e => {
     e.stopPropagation();
-    if (earlyPlay && using){ stopSound(); earlyPlay = false; }
+    if (earlyPlay && using){ stopSound(); earlyPlay = false; earlyStopped = true; }
     else { initAudio(); earlyPlay = true; startSound(); }
     paintNightControls();
   };
