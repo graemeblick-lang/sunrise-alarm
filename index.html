@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Sunrise Alarm</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --amber:#ffb36b; --ink:#f4e9dc; --muted:#a8968a; --line:#2a2320; --card:#151110;
+    --sky:#000; --glow:#000; --sunY:140%; --sunR:10%; --clock:#3a1c0a;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:#000;color:var(--ink);font-family:Outfit,system-ui,sans-serif;overflow:hidden;user-select:none}
+  button,input,select{font:inherit;color:inherit}
+  button{border:0;cursor:pointer}
+  .screen{position:fixed;inset:0;display:none;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+  .screen.on{display:flex}
+
+  /* ---------- Setup ---------- */
+  #setup{flex-direction:column;overflow-y:auto;padding:28px 22px 40px;background:radial-gradient(120% 70% at 50% 110%,#3b1606 0%,#120806 45%,#000 75%)}
+  #setup h1{font-weight:300;font-size:22px;letter-spacing:.04em;margin:0 0 4px;color:var(--amber)}
+  #setup .sub{color:var(--muted);font-size:14px;margin-bottom:18px}
+  .timebox input{background:transparent;border:0;color:var(--ink);font:200 56px Outfit,sans-serif;text-align:center;width:100%;color-scheme:dark}
+  .nexttxt{text-align:center;color:var(--muted);font-size:14px;margin:2px 0 20px;min-height:18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px 16px 14px;margin-bottom:14px}
+  .card label.t{display:block;font-size:13px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{padding:9px 14px;border-radius:999px;background:#211a17;color:#cdbcae;font-size:15px}
+  .chip.sel{background:var(--amber);color:#2a1205;font-weight:600}
+  .days .chip{width:40px;height:40px;padding:0;display:grid;place-items:center}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 0}
+  .row span{font-size:16px}
+  .hint{font-size:13px;color:var(--muted);line-height:1.45;margin-top:6px}
+  input[type=range]{width:100%;accent-color:var(--amber)}
+  input[type=text],input[type=url],input[type=password],select{width:100%;background:#0d0a09;border:1px solid #2e2522;border-radius:12px;padding:12px;color:var(--ink);font-size:15px;margin-top:6px}
+  .toggle{width:52px;height:30px;border-radius:30px;background:#2c2420;position:relative;flex:none}
+  .toggle::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#7a6a60;transition:.2s}
+  .toggle.on{background:var(--amber)}
+  .toggle.on::after{left:25px;background:#2a1205}
+  .big{width:100%;padding:18px;border-radius:18px;font-size:20px;font-weight:600;margin-top:8px}
+  .primary{background:linear-gradient(180deg,#ffbe7a,#ff8f3d);color:#2a1205}
+  .ghost{background:#1c1513;color:#dcc9b9;font-weight:400;font-size:16px;padding:14px}
+  .small{padding:10px 14px;border-radius:12px;background:#2a201c;color:#e7cdb5;font-size:14px}
+  .status{font-size:13px;color:var(--muted);margin-top:16px;line-height:1.5}
+  .status b{color:#e8c9a8;font-weight:400}
+  .warn{color:#ffb36b}
+  .sub-panel{display:none;margin-top:10px}
+  .sub-panel.on{display:block}
+  #songList{font-size:14px;color:#cdbcae;margin:8px 0;line-height:1.6}
+  .fc{display:flex;gap:10px;align-items:center;font-size:15px;color:#e2cdb9}
+  .fc .em{font-size:28px}
+
+  /* ---------- Night / Sunrise ---------- */
+  #night{align-items:center;justify-content:center;flex-direction:column;
+    background:radial-gradient(var(--sunR) var(--sunR) at 50% var(--sunY),var(--glow) 0%,transparent 100%),var(--sky)}
+  #clockWrap{text-align:center;transition:transform 2s ease}
+  #nClock{font-weight:200;font-size:min(30vw,190px);line-height:1;color:var(--clock);letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  #nInfo{margin-top:10px;font-size:18px;color:var(--clock);opacity:.85}
+  #nControls{position:absolute;bottom:28px;left:0;right:0;display:none;justify-content:center;gap:12px}
+  #nControls.show{display:flex}
+  #nControls button{padding:14px 20px;border-radius:14px;background:rgba(40,25,18,.85);color:#d9b89a;font-size:15px}
+
+  /* ---------- Ringing ---------- */
+  #ring{flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(90% 70% at 50% 85%,#fff6e3,#ffd9a1 55%,#ffb46e)}
+  #rClock{font-weight:200;font-size:min(28vw,180px);color:#5a2c10;line-height:1}
+  #rMsg{color:#7a4520;font-size:20px;margin:8px 0 6px;text-align:center}
+  #rNow{color:#8a5530;font-size:15px;margin-bottom:34px;min-height:20px;text-align:center;padding:0 20px}
+  .rbtns{display:flex;flex-direction:column;gap:14px;width:min(86vw,420px)}
+  #snoozeBtn{background:rgba(255,255,255,.55);color:#6a3412;padding:22px;border-radius:22px;font-size:22px}
+  #upBtn{background:#6a3412;color:#fff1de;padding:22px;border-radius:22px;font-size:22px;font-weight:600}
+
+  /* ---------- Morning ---------- */
+  #morning{flex-direction:column;overflow-y:auto;padding:30px 22px 30px;background:linear-gradient(180deg,#fff4e2 0%,#ffe3bd 55%,#ffcf98 100%);color:#3d1f0c}
+  #mGreet{font-size:22px;font-weight:300;color:#8a4e22}
+  #mClock{font-size:min(24vw,150px);font-weight:200;line-height:1;margin:2px 0 0;font-variant-numeric:tabular-nums}
+  #mDate{font-size:20px;margin:6px 0 20px;color:#6a3a18}
+  .mcard{background:rgba(255,255,255,.55);border-radius:20px;padding:16px 18px;margin-bottom:14px}
+  .mcard h3{margin:0 0 10px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#9a5f33;font-weight:600;display:flex;justify-content:space-between}
+  .mcard h3 a{color:#9a5f33;text-transform:none;letter-spacing:0;font-weight:400}
+  .wxTop{display:flex;align-items:center;gap:14px}
+  .wxEm{font-size:54px;line-height:1}
+  .wxTemp{font-size:52px;font-weight:200;line-height:1}
+  .wxDesc{font-size:17px;color:#6a3a18}
+  .wxGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:14px;text-align:center}
+  .wxGrid small,.sunrow small{display:block;font-size:11px;color:#9a6a45;text-transform:uppercase;letter-spacing:.06em}
+  .wxGrid span{font-size:18px}
+  .sunrow{display:flex;justify-content:space-between;font-size:18px}
+  #tasks{list-style:none;margin:0;padding:0}
+  #tasks li{display:flex;gap:12px;align-items:flex-start;padding:8px 0;border-top:1px solid rgba(120,70,30,.12);font-size:17px}
+  #tasks li:first-child{border-top:0}
+  .dot{width:10px;height:10px;border-radius:50%;margin-top:7px;flex:none;background:#c9a98c}
+  .p1{background:#d1453b}.p2{background:#eb8909}.p3{background:#246fe0}
+  .tnote{color:#9a6a45;font-size:15px}
+  .willy{display:block;text-align:center;text-decoration:none;background:rgba(255,255,255,.7);color:#5a2c10;padding:14px;border-radius:16px;font-size:16px;margin-bottom:10px}
+  #mDone{background:#5a2c10;color:#fff1de;margin-top:4px}
+
+  .rleft{text-align:center}
+  .mL,.mR{display:contents}
+  #mDone{order:9}
+  @media (orientation:landscape) and (max-height:600px){
+    #ring{flex-direction:row;gap:6vw}
+    #rClock{font-size:min(22vw,38vh)}
+    #rNow{margin-bottom:0}
+    .rbtns{width:min(40vw,360px)}
+    #morning{padding:24px 4vw}
+    #morning.on{display:grid;grid-template-columns:38% 1fr;grid-template-rows:auto 1fr;column-gap:4vw;align-content:start}
+    .mL{display:block;grid-column:1;grid-row:1}
+    .mR{display:block;grid-column:2;grid-row:1 / span 2;min-width:0}
+    #mClock{font-size:min(16vw,30vh)}
+    #mDone{grid-column:1;grid-row:2;align-self:start;order:0}
+  }
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#2a1d17;color:#f3d8bd;padding:12px 18px;border-radius:12px;font-size:14px;opacity:0;transition:.3s;pointer-events:none;z-index:9;max-width:90vw;text-align:center}
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<!-- SETUP -->
+<section id="setup" class="screen on">
+  <h1>☀︎ Sunrise Alarm</h1>
+  <div class="sub">Wake up to light, not noise.</div>
+
+  <div class="timebox"><input id="alarmTime" type="time" value="06:30"></div>
+  <div class="nexttxt" id="nextTxt"></div>
+
+  <div class="card">
+    <label class="t">Repeat</label>
+    <div class="chips days" id="days"></div>
+  </div>
+
+  <div class="card">
+    <label class="t">Sunrise starts before alarm</label>
+    <div class="chips" id="durChips"></div>
+  </div>
+
+  <div class="card">
+    <label class="t">Wake-up sound</label>
+    <div class="chips" id="srcChips"></div>
+
+    <div class="sub-panel" id="radioPanel">
+      <select id="station"></select>
+      <input type="url" id="customUrl" placeholder="Paste a stream link (https://…)">
+      <div class="hint">Needs internet. If the stream won't play, it falls back to the chimes.</div>
+    </div>
+
+    <div class="sub-panel" id="songsPanel">
+      <div id="songList">No songs added yet.</div>
+      <div class="chips">
+        <button class="small" id="addSongs">Add songs from phone</button>
+        <button class="small" id="clearSongs">Clear</button>
+      </div>
+      <input type="file" id="songFile" accept="audio/*" multiple hidden>
+      <div class="hint">Songs are saved inside the app, so they play even without internet. They play in shuffled order.</div>
+    </div>
+
+    <div class="sub-panel" id="spotifyPanel">
+      <div id="spState" class="hint" style="margin-top:0"></div>
+      <div id="spSetup">
+        <input type="text" id="spClient" placeholder="Spotify Client ID" autocomplete="off">
+        <div class="hint">Redirect URI to paste into Spotify: <b id="spRedirect" style="user-select:text;color:#e8c9a8;font-weight:400"></b></div>
+        <div class="chips" style="margin-top:8px"><button class="small" id="spConnect">Connect Spotify</button></div>
+      </div>
+      <div id="spReady">
+        <input type="url" id="spLink" placeholder="Paste a Spotify playlist, album or song link">
+        <div class="row"><span>Shuffle</span><div class="toggle" id="spShuffle"></div></div>
+        <div style="font-size:14px;color:var(--muted);margin-top:4px">Play on</div>
+        <div class="chips" id="spDevices" style="margin-top:6px"></div>
+        <div class="chips" style="margin-top:8px"><button class="small" id="spFind">Find speakers</button><button class="small" id="spLogout">Disconnect</button></div>
+        <div class="hint">Open Spotify on this phone first so it shows up. For reliability set Spotify's battery use to <b>Unrestricted</b> (long-press the Spotify icon → App info → Battery). If Spotify doesn't start, it falls back to the chimes.</div>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px"><button class="small" id="testSound">▶ Test sound</button><span id="testState" class="hint" style="margin:0"></span></div>
+
+    <div style="margin-top:10px">
+      <span style="font-size:14px;color:var(--muted)">Max volume</span>
+      <input type="range" id="vol" min="10" max="100" value="70">
+    </div>
+    <div class="row"><span>Fade in over</span><div class="chips" id="fadeChips"></div></div>
+    <div class="row"><span>Snooze</span><div class="chips" id="snzChips"></div></div>
+  </div>
+
+  <div class="card">
+    <label class="t">Overnight clock brightness</label>
+    <input type="range" id="dim" min="1" max="6" value="2">
+  </div>
+
+  <div class="card">
+    <label class="t">Weather location</label>
+    <div class="row"><span id="locName">Melbourne</span><button class="small" id="useLoc">Use my location</button></div>
+    <input type="url" id="willy" placeholder="Your WillyWeather page link (optional)">
+    <div class="hint">Location and links are saved only on this phone.</div>
+    <div class="fc" id="tmrw"></div>
+  </div>
+
+  <div class="card">
+    <label class="t">Todoist on the morning screen</label>
+    <input type="password" id="todoToken" placeholder="Paste your Todoist API token (optional)" autocomplete="off">
+    <div class="hint">Find it in Todoist → Settings → Integrations → Developer → API token. It's stored only on this phone.</div>
+  </div>
+
+  <button class="big primary" id="goodnight">Goodnight</button>
+  <button class="big ghost" id="preview">Preview the sunrise (1 minute)</button>
+
+  <div class="status" id="status"></div>
+</section>
+
+<!-- NIGHT + SUNRISE -->
+<section id="night" class="screen">
+  <div id="clockWrap">
+    <div id="nClock">--:--</div>
+    <div id="nInfo"></div>
+  </div>
+  <div id="nControls">
+    <button id="nSettings">Change alarm</button>
+    <button id="nCancel">Turn off alarm</button>
+  </div>
+</section>
+
+<!-- RINGING -->
+<section id="ring" class="screen">
+  <div class="rleft">
+    <div id="rClock">--:--</div>
+    <div id="rMsg">Good morning</div>
+    <div id="rNow"></div>
+  </div>
+  <div class="rbtns">
+    <button id="snoozeBtn">Snooze</button>
+    <button id="upBtn">I'm up</button>
+  </div>
+</section>
+
+<!-- MORNING -->
+<section id="morning" class="screen">
+  <div class="mL">
+  <div id="mGreet">Good morning</div>
+  <div id="mClock">--:--</div>
+  <div id="mDate"></div>
+  </div>
+  <div class="mR">
+
+  <div class="mcard">
+    <h3>Weather <span id="wxWhere"></span></h3>
+    <div id="wxBody"><div class="tnote">Loading…</div></div>
+  </div>
+  <a class="willy" id="willyLink" href="https://www.willyweather.com.au/" target="_blank" rel="noopener">Open WillyWeather ↗</a>
+
+  <div class="mcard">
+    <h3>Daylight</h3>
+    <div class="sunrow">
+      <div><small>Sunrise</small><span id="sRise">–</span></div>
+      <div style="text-align:center"><small>Daylight</small><span id="sLen">–</span></div>
+      <div style="text-align:right"><small>Sunset</small><span id="sSet">–</span></div>
+    </div>
+  </div>
+
+  <div class="mcard" id="todoCard">
+    <h3>Today</h3>
+    <ul id="tasks"></ul>
+    <div class="tnote" id="tNote">Loading…</div>
+  </div>
+
+  </div>
+  <button class="big" id="mDone">Done</button>
+</section>
+
+<audio id="player" preload="none" playsinline></audio>
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  // ---------- Settings ----------
+  const STATIONS = [
+    ["ABC Melbourne",  "https://live-radio01.mediahubaustralia.com/3LRW/mp3/"],
+    ["triple j",       "https://live-radio01.mediahubaustralia.com/2TJW/mp3/"],
+    ["Double J",       "https://live-radio01.mediahubaustralia.com/DJDW/mp3/"],
+    ["ABC Classic",    "https://live-radio01.mediahubaustralia.com/2FMW/mp3/"],
+    ["Custom stream…", ""]
+  ];
+  const DEF = { time:"06:30", days:[1,2,3,4,5], dur:30, src:"chimes", station:0, customUrl:"", vol:70, fade:3, snooze:9, dim:2,
+                lat:-37.814, lon:144.963, place:"Melbourne", willy:"", todoToken:"",
+                spClient:"", spLink:"", spShuffle:true, spDevice:null };
+  // Spotify tokens are kept separately from settings
+  let SPT = {};
+  try { SPT = JSON.parse(localStorage.getItem("sunrise-spotify") || "{}"); } catch(e){}
+  const saveSPT = () => { try { localStorage.setItem("sunrise-spotify", JSON.stringify(SPT)); } catch(e){} };
+  let S = { ...DEF };
+  try { const s = JSON.parse(localStorage.getItem("sunrise-settings") || "null"); if (s) S = { ...DEF, ...s }; } catch(e){}
+  const save = () => { try { localStorage.setItem("sunrise-settings", JSON.stringify(S)); } catch(e){} };
+
+  const $ = id => document.getElementById(id);
+  const pad = n => String(n).padStart(2,"0");
+  const fmt = d => `${d.getHours()%12||12}:${pad(d.getMinutes())}`;
+  const fmtAP = d => `${fmt(d)} ${d.getHours()>=12?"pm":"am"}`;
+  const DAYN = ["S","M","T","W","T","F","S"];
+  const DAYL = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  function toast(msg){ const t=$("toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove("show"),3000); }
+
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
+
+  // ---------- Setup UI ----------
+  const daysEl = $("days");
+  DAYN.forEach((d,i)=>{ const b=document.createElement("button"); b.className="chip"; b.textContent=d; b.onclick=()=>{ S.days = S.days.includes(i)? S.days.filter(x=>x!==i) : [...S.days,i]; save(); paint(); }; daysEl.appendChild(b); });
+  function chipGroup(el, opts, key, label){
+    opts.forEach(v=>{ const b=document.createElement("button"); b.className="chip"; b.textContent=label(v); b.dataset.v=v; b.onclick=()=>{ S[key]=isNaN(+v)?v:+v; save(); paint(); }; el.appendChild(b); });
+  }
+  chipGroup($("durChips"), [15,20,30,45], "dur", v=>`${v} min`);
+  chipGroup($("snzChips"), [5,9,15], "snooze", v=>`${v}m`);
+  chipGroup($("fadeChips"), [1,3,5], "fade", v=>`${v}m`);
+  chipGroup($("srcChips"), ["chimes","spotify","radio","songs"], "src", v=>({chimes:"Chimes",spotify:"Spotify",radio:"Radio stream",songs:"My songs"})[v]);
+  STATIONS.forEach(([n],i)=>{ const o=document.createElement("option"); o.value=i; o.textContent=n; $("station").appendChild(o); });
+
+  $("alarmTime").onchange = e => { S.time = e.target.value || "06:30"; save(); paint(); };
+  $("station").onchange = e => { S.station = +e.target.value; save(); paint(); };
+  $("customUrl").onchange = e => { S.customUrl = e.target.value.trim(); save(); };
+  $("vol").oninput = e => { S.vol=+e.target.value; save(); };
+  $("dim").oninput = e => { S.dim=+e.target.value; save(); };
+  $("willy").onchange = e => { S.willy = e.target.value.trim(); save(); paint(); };
+  $("todoToken").onchange = e => { S.todoToken = e.target.value.trim(); save(); };
+
+  function nextAlarm(from = new Date()){
+    const [h,m] = S.time.split(":").map(Number);
+    for (let d=0; d<=7; d++){
+      const t = new Date(from); t.setDate(t.getDate()+d); t.setHours(h,m,0,0);
+      if (t <= from) continue;
+      if (!S.days.length || S.days.includes(t.getDay())) return t;
+    }
+    return null;
+  }
+  function describeAlarm(t){
+    if (!t) return "";
+    const now = new Date(), mins = Math.round((t-now)/60000);
+    const day = t.toDateString()===now.toDateString() ? "today" :
+                (new Date(now.getTime()+864e5).toDateString()===t.toDateString() ? "tomorrow" : DAYL[t.getDay()]);
+    return `Alarm ${day} at ${fmtAP(t)} · in ${Math.floor(mins/60)}h ${mins%60}m`;
+  }
+
+  function paint(){
+    $("alarmTime").value = S.time;
+    [...daysEl.children].forEach((b,i)=>b.classList.toggle("sel", S.days.includes(i)));
+    const sel = (id,key) => [...$(id).children].forEach(b=>b.classList.toggle("sel", String(b.dataset.v)===String(S[key])));
+    sel("durChips","dur"); sel("snzChips","snooze"); sel("fadeChips","fade"); sel("srcChips","src");
+    $("radioPanel").classList.toggle("on", S.src==="radio");
+    $("songsPanel").classList.toggle("on", S.src==="songs");
+    $("spotifyPanel").classList.toggle("on", S.src==="spotify");
+    const spOn = !!SPT.refresh;
+    $("spSetup").style.display = spOn ? "none" : "";
+    $("spReady").style.display = spOn ? "" : "none";
+    $("spState").textContent = spOn ? "✓ Spotify connected" + (S.spDevice ? ` · plays on ${S.spDevice.name}` : " · pick a speaker below") : "Needs Spotify Premium and a one-time setup.";
+    $("spRedirect").textContent = SP.redirect();
+    $("spClient").value = S.spClient; $("spLink").value = S.spLink;
+    $("spShuffle").classList.toggle("on", S.spShuffle);
+    $("station").value = S.station;
+    $("customUrl").style.display = STATIONS[S.station][1] ? "none" : "";
+    $("customUrl").value = S.customUrl;
+    $("todoToken").value = S.todoToken;
+    $("vol").value = S.vol; $("dim").value = S.dim;
+    $("locName").textContent = S.place;
+    $("nextTxt").textContent = (S.days.length ? "" : "One-off · ") + describeAlarm(nextAlarm());
+    $("willyLink").href = /^https:\/\/(www\.)?willyweather\.com\.au\//.test(S.willy) ? S.willy : "https://www.willyweather.com.au/";
+    $("willy").value = S.willy;
+  }
+
+  // ---------- Location ----------
+  $("useLoc").onclick = () => {
+    if (!navigator.geolocation) return toast("Location isn't available");
+    navigator.geolocation.getCurrentPosition(p=>{
+      S.lat = +p.coords.latitude.toFixed(3); S.lon = +p.coords.longitude.toFixed(3); S.place = "Your location";
+      save(); paint(); getWeather(true).then(paintTomorrow);
+    }, ()=>toast("Couldn't get your location"), {timeout:15000});
+  };
+
+  // ---------- Weather (Open-Meteo, free, no key) ----------
+  const WX = {0:["☀️","Clear"],1:["🌤️","Mostly clear"],2:["⛅","Partly cloudy"],3:["☁️","Cloudy"],45:["🌫️","Fog"],48:["🌫️","Fog"],
+    51:["🌦️","Light drizzle"],53:["🌦️","Drizzle"],55:["🌧️","Heavy drizzle"],56:["🌧️","Freezing drizzle"],57:["🌧️","Freezing drizzle"],
+    61:["🌦️","Light rain"],63:["🌧️","Rain"],65:["🌧️","Heavy rain"],66:["🌧️","Freezing rain"],67:["🌧️","Freezing rain"],
+    71:["🌨️","Light snow"],73:["🌨️","Snow"],75:["❄️","Heavy snow"],77:["🌨️","Snow grains"],80:["🌦️","Showers"],81:["🌧️","Showers"],
+    82:["⛈️","Heavy showers"],85:["🌨️","Snow showers"],86:["🌨️","Snow showers"],95:["⛈️","Thunderstorms"],96:["⛈️","Storms, hail"],99:["⛈️","Storms, hail"]};
+  const wx = c => WX[c] || ["🌡️","—"];
+  let wxCache = null;
+  try { wxCache = JSON.parse(localStorage.getItem("sunrise-wx")||"null"); } catch(e){}
+  async function getWeather(force){
+    if (!force && wxCache && Date.now()-wxCache.at < 30*60000 && wxCache.lat===S.lat && wxCache.lon===S.lon) return wxCache.d;
+    const u = `https://api.open-meteo.com/v1/forecast?latitude=${S.lat}&longitude=${S.lon}`+
+      `&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m`+
+      `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,wind_speed_10m_max,uv_index_max`+
+      `&timezone=auto&forecast_days=2`;
+    try {
+      const r = await fetch(u); if (!r.ok) throw 0;
+      const d = await r.json();
+      wxCache = { at:Date.now(), lat:S.lat, lon:S.lon, d };
+      try { localStorage.setItem("sunrise-wx", JSON.stringify(wxCache)); } catch(e){}
+      return d;
+    } catch(e){ return wxCache ? wxCache.d : null; }
+  }
+  function dayIndex(d){ const today = new Date().toLocaleDateString("en-CA"); const i = d.daily.time.indexOf(today); return i<0?0:i; }
+  async function paintTomorrow(){
+    const d = await getWeather();
+    if (!d){ $("tmrw").textContent = ""; return; }
+    const na = nextAlarm() || new Date(Date.now()+864e5);
+    let i = d.daily.time.indexOf(na.toLocaleDateString("en-CA")); if (i<0) i = d.daily.time.length-1;
+    const [em,txt] = wx(d.daily.weather_code[i]);
+    $("tmrw").innerHTML = `<span class="em">${em}</span><span>${i===0?"Today":"Tomorrow"}: ${txt}, ${Math.round(d.daily.temperature_2m_min[i])}°–${Math.round(d.daily.temperature_2m_max[i])}°, ${d.daily.precipitation_probability_max[i] ?? 0}% rain</span>`;
+  }
+  async function paintWeather(){
+    $("wxWhere").textContent = S.place;
+    const d = await getWeather();
+    if (!d){ $("wxBody").innerHTML = `<div class="tnote">Couldn't load the weather. Check the Wi-Fi.</div>`; return; }
+    const i = dayIndex(d), c = d.current, [em,txt] = wx(c.weather_code), [dem,dtxt] = wx(d.daily.weather_code[i]);
+    const rainMm = d.daily.precipitation_sum[i] || 0;
+    $("wxBody").innerHTML = `
+      <div class="wxTop"><div class="wxEm">${em}</div><div><div class="wxTemp">${Math.round(c.temperature_2m)}°</div>
+      <div class="wxDesc">${txt} · feels ${Math.round(c.apparent_temperature)}°</div></div></div>
+      <div class="wxDesc" style="margin-top:10px">Today: ${dtxt.toLowerCase()}${rainMm>=0.5?`, about ${rainMm.toFixed(0)} mm of rain`:""}</div>
+      <div class="wxGrid">
+        <div><small>High</small><span>${Math.round(d.daily.temperature_2m_max[i])}°</span></div>
+        <div><small>Low</small><span>${Math.round(d.daily.temperature_2m_min[i])}°</span></div>
+        <div><small>Rain</small><span>${d.daily.precipitation_probability_max[i] ?? 0}%</span></div>
+        <div><small>Wind</small><span>${Math.round(d.daily.wind_speed_10m_max[i])}<span style="font-size:11px"> km/h</span></span></div>
+      </div>
+      ${d.daily.uv_index_max[i]>=8 ? `<div class="wxDesc" style="margin-top:10px">☀️ UV ${Math.round(d.daily.uv_index_max[i])}: slip, slop, slap</div>`:""}`;
+  }
+
+  // ---------- Keep screen awake ----------
+  let wakeOK = null;
+  async function grabWake(){
+    try { if ("wakeLock" in navigator){ await navigator.wakeLock.request("screen"); wakeOK = true; return; } } catch(e){}
+    wakeOK = false;
+  }
+  document.addEventListener("visibilitychange", ()=>{ if (document.visibilityState==="visible" && mode!=="setup") grabWake(); });
+  function statusText(){
+    const parts = [];
+    const installed = matchMedia("(display-mode: fullscreen), (display-mode: standalone)").matches;
+    if (!installed) parts.push(`<b>Install it:</b> Chrome menu ⋮ → <b>Add to home screen</b> → Install. Then open it from the icon.`);
+    if (wakeOK===false) parts.push(`<span class="warn">⚠ Couldn't keep the screen on.</span> Turn on <b>Developer options → Stay awake</b>.`);
+    else if (wakeOK===true) parts.push(`✓ Screen will stay on overnight.`);
+    parts.push(`Set phone brightness to <b>max</b> and turn off <b>Adaptive brightness</b>. The app keeps itself dark overnight; full brightness lets the sunrise light the room. Leave the app open and the phone on charge.`);
+    $("status").innerHTML = parts.join("<br><br>");
+  }
+
+  // ---------- Songs (stored in IndexedDB) ----------
+  const DB = new Promise(res=>{
+    try { const r = indexedDB.open("sunrise",1); r.onupgradeneeded=()=>r.result.createObjectStore("songs",{keyPath:"id",autoIncrement:true}); r.onsuccess=()=>res(r.result); r.onerror=()=>res(null); } catch(e){ res(null); }
+  });
+  async function songsAll(){ const db = await DB; if (!db) return []; return new Promise(res=>{ const q = db.transaction("songs").objectStore("songs").getAll(); q.onsuccess=()=>res(q.result||[]); q.onerror=()=>res([]); }); }
+  async function songsAdd(files){ const db = await DB; if (!db) return; const st = db.transaction("songs","readwrite").objectStore("songs"); for (const f of files) st.add({name:f.name, blob:f}); return new Promise(r=>st.transaction.oncomplete=r); }
+  async function songsClear(){ const db = await DB; if (!db) return; const st = db.transaction("songs","readwrite").objectStore("songs"); st.clear(); return new Promise(r=>st.transaction.oncomplete=r); }
+  async function paintSongs(){ const s = await songsAll(); $("songList").textContent = s.length ? s.map(x=>"♪ "+x.name.replace(/\.[^.]+$/,"")).join("\n") : "No songs added yet."; $("songList").style.whiteSpace="pre-line"; }
+  $("addSongs").onclick = () => $("songFile").click();
+  $("songFile").onchange = async e => { if (e.target.files.length){ await songsAdd([...e.target.files]); paintSongs(); toast(`Added ${e.target.files.length} song(s)`); } e.target.value=""; };
+  $("clearSongs").onclick = async () => { await songsClear(); paintSongs(); };
+
+  // ---------- Spotify (Web API, PKCE login, plays via Spotify Connect) ----------
+  const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+  const SP = {
+    redirect: () => location.origin + location.pathname,
+    async connect(){
+      S.spClient = $("spClient").value.trim(); save();
+      if (!S.spClient) return toast("Paste your Spotify Client ID first");
+      const arr = crypto.getRandomValues(new Uint8Array(48));
+      const verifier = b64url(arr);
+      const challenge = b64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
+      SPT.verifier = verifier; saveSPT();
+      const q = new URLSearchParams({ response_type:"code", client_id:S.spClient, redirect_uri:SP.redirect(),
+        scope:"user-modify-playback-state user-read-playback-state", code_challenge_method:"S256", code_challenge:challenge });
+      location.href = "https://accounts.spotify.com/authorize?" + q;
+    },
+    async tokenCall(params){
+      const r = await fetch("https://accounts.spotify.com/api/token", { method:"POST",
+        headers:{ "Content-Type":"application/x-www-form-urlencoded" }, body:new URLSearchParams({ client_id:S.spClient, ...params }) });
+      if (!r.ok) throw { status:r.status };
+      const j = await r.json();
+      SPT.access = j.access_token; SPT.exp = Date.now() + (j.expires_in||3600)*1000;
+      if (j.refresh_token) SPT.refresh = j.refresh_token;
+      saveSPT();
+    },
+    async handleRedirect(){
+      const q = new URLSearchParams(location.search);
+      if (!q.has("code") && !q.has("error")) return;
+      history.replaceState(null, "", location.pathname);
+      if (q.has("error")) return toast("Spotify login was cancelled");
+      try {
+        await SP.tokenCall({ grant_type:"authorization_code", code:q.get("code"), redirect_uri:SP.redirect(), code_verifier:SPT.verifier });
+        delete SPT.verifier; saveSPT();
+        S.src = "spotify"; save(); paint(); toast("Spotify connected");
+        SP.listDevices();
+      } catch(e){ toast("Spotify login failed. Check the Client ID and redirect URI."); }
+    },
+    async token(){
+      if (SPT.access && Date.now() < SPT.exp - 60000) return SPT.access;
+      if (!SPT.refresh) throw { status:401 };
+      await SP.tokenCall({ grant_type:"refresh_token", refresh_token:SPT.refresh });
+      return SPT.access;
+    },
+    async api(method, path, body){
+      const t = await SP.token();
+      const r = await fetch("https://api.spotify.com/v1" + path, { method,
+        headers: { Authorization:"Bearer " + t, ...(body ? { "Content-Type":"application/json" } : {}) },
+        body: body ? JSON.stringify(body) : undefined });
+      if (!r.ok) throw { status:r.status };
+      const tx = await r.text(); return tx ? JSON.parse(tx) : {};
+    },
+    async devices(){ return (await SP.api("GET","/me/player/devices")).devices || []; },
+    async listDevices(){
+      const box = $("spDevices"); box.innerHTML = '<span class="hint" style="margin:0">Looking…</span>';
+      try {
+        const ds = await SP.devices();
+        box.innerHTML = "";
+        if (!ds.length){ box.innerHTML = '<span class="hint" style="margin:0">No speakers found. Open Spotify on this phone, then tap Find speakers.</span>'; return; }
+        ds.forEach(d=>{ const b=document.createElement("button"); b.className="chip"+(S.spDevice&&S.spDevice.id===d.id?" sel":""); b.textContent=(d.type==="Smartphone"?"📱 ":"🔊 ")+d.name;
+          b.onclick=()=>{ S.spDevice={id:d.id,name:d.name}; save(); paint(); SP.listDevices(); }; box.appendChild(b); });
+      } catch(e){ box.innerHTML = '<span class="hint" style="margin:0">Couldn\'t reach Spotify.</span>'; }
+    },
+    async findDevice(){
+      if (!S.spDevice) return null;
+      const ds = await SP.devices();
+      return ds.find(d=>d.id===S.spDevice.id) || ds.find(d=>d.name===S.spDevice.name) || null;
+    },
+    parseLink(s){
+      const m = (s||"").match(/(playlist|album|artist|track|show|episode)[/:]([A-Za-z0-9]{10,})/);
+      if (!m) return null;
+      const uri = `spotify:${m[1]}:${m[2]}`;
+      return (m[1]==="track"||m[1]==="episode") ? { uris:[uri] } : { context_uri:uri };
+    }
+  };
+  $("spConnect").onclick = () => SP.connect();
+  $("spFind").onclick = () => SP.listDevices();
+  $("spLogout").onclick = () => { SPT = {}; saveSPT(); S.spDevice = null; save(); paint(); };
+  $("spLink").onchange = e => { S.spLink = e.target.value.trim(); save(); if (S.spLink && !SP.parseLink(S.spLink)) toast("That doesn't look like a Spotify link"); };
+  $("spClient").onchange = e => { S.spClient = e.target.value.trim(); save(); };
+  $("spShuffle").onclick = () => { S.spShuffle = !S.spShuffle; save(); paint(); };
+
+  // ---------- Audio engine ----------
+  const player = $("player");
+  let ac = null, master = null, chimeTimer = null, ringStart = 0, using = null, songQueue = [], songUrl = null, fallbackTimer = null;
+  function initAudio(){
+    try {
+      if (!ac){
+        ac = new (window.AudioContext||window.webkitAudioContext)();
+        master = ac.createGain(); master.gain.value = 0; master.connect(ac.destination);
+        const k = ac.createOscillator(), kg = ac.createGain(); kg.gain.value = 0.00001; k.connect(kg).connect(ac.destination); k.start();
+      }
+      ac.resume();
+    } catch(e){}
+  }
+  const NOTES = [523.25, 659.25, 783.99, 880.00, 1046.5, 783.99];
+  function bell(freq, t, vel){
+    const o = ac.createOscillator(), o2 = ac.createOscillator(), g = ac.createGain(), g2 = ac.createGain();
+    o.frequency.value=freq; o2.frequency.value=freq*2.01; g2.gain.value=.18;
+    o.connect(g); o2.connect(g2).connect(g); g.connect(master);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vel, t+0.015); g.gain.exponentialRampToValueAtTime(0.0001, t+2.6);
+    o.start(t); o2.start(t); o.stop(t+2.7); o2.stop(t+2.7);
+  }
+  function playPhrase(){ if (!ac) return; const t0 = ac.currentTime + 0.05; NOTES.forEach((f,i)=>bell(f, t0 + i*0.42, 0.5)); }
+  function startChimes(){ initAudio(); if (!ac) return; using = "chimes"; clearInterval(chimeTimer); playPhrase(); chimeTimer = setInterval(playPhrase, 5200); $("rNow").textContent = ""; }
+
+  function streamUrl(){ return STATIONS[S.station][1] || S.customUrl; }
+  function fallBack(why){ if (using==="chimes") return; stopPlayer(); startChimes(); $("rNow").textContent = why; }
+  function stopPlayer(){ clearTimeout(fallbackTimer); player.onended = player.onerror = player.onplaying = null; try { player.pause(); } catch(e){} player.removeAttribute("src"); player.load(); if (songUrl){ URL.revokeObjectURL(songUrl); songUrl=null; } }
+  function armFallback(why){ clearTimeout(fallbackTimer); fallbackTimer = setTimeout(()=>{ if (player.paused || player.readyState<3) fallBack(why); }, 12000); }
+
+  async function startRadio(){
+    const u = streamUrl();
+    if (!u) return fallBack("No stream link set, so playing chimes");
+    using = "radio"; player.volume = 0.05; player.src = u;
+    player.onerror = () => fallBack("Radio wouldn't play, so playing chimes");
+    player.onplaying = () => { clearTimeout(fallbackTimer); $("rNow").textContent = "📻 " + STATIONS[S.station][0].replace("…",""); };
+    armFallback("Radio didn't start, so playing chimes");
+    try { await player.play(); } catch(e){ fallBack("Radio was blocked, so playing chimes"); }
+  }
+  async function playNextSong(){
+    if (!songQueue.length){ const all = await songsAll(); if (!all.length) return fallBack("No songs added, so playing chimes"); songQueue = all.sort(()=>Math.random()-.5); }
+    const s = songQueue.shift();
+    if (songUrl) URL.revokeObjectURL(songUrl);
+    songUrl = URL.createObjectURL(s.blob); player.src = songUrl;
+    player.onended = playNextSong;
+    player.onerror = () => playNextSong();
+    $("rNow").textContent = "♪ " + s.name.replace(/\.[^.]+$/,"");
+    try { await player.play(); } catch(e){ fallBack("Couldn't play your songs, so playing chimes"); }
+  }
+  async function startSongs(){ using = "songs"; player.volume = 0.05; songQueue = []; await playNextSong(); }
+
+  let spDev = null, spLastVol = -1, spLastSet = 0;
+  async function startSpotify(){
+    using = "spotify"; spDev = null; spLastVol = -1;
+    $("rNow").textContent = "Starting Spotify…";
+    const body = SP.parseLink(S.spLink);
+    try {
+      if (!SPT.refresh) throw "login";
+      if (!body) throw "link";
+      const d = await SP.findDevice();
+      if (!d) throw "device";
+      if (using !== "spotify") return;               // snoozed/stopped while we were waiting
+      const initPct = Math.round(Math.max(5, Math.min(1, 0.06 + (Date.now()-ringStart)/(S.fade*60000)) * S.vol));
+      await SP.api("PUT", `/me/player/volume?volume_percent=${initPct}&device_id=${d.id}`).catch(()=>{});
+      await SP.api("PUT", `/me/player/play?device_id=${d.id}`, body);
+      await SP.api("PUT", `/me/player/shuffle?state=${S.spShuffle}&device_id=${d.id}`).catch(()=>{});
+      if (using !== "spotify"){ SP.api("PUT", `/me/player/pause?device_id=${d.id}`).catch(()=>{}); return; }
+      spDev = d.id; spLastVol = initPct; spLastSet = Date.now();
+      $("rNow").textContent = "🎵 Spotify on " + d.name;
+    } catch(e){
+      if (using !== "spotify") return;
+      const why = e==="login" ? "Spotify isn't connected" : e==="link" ? "No Spotify playlist set" :
+                  e==="device" ? "Spotify isn't showing this phone" : "Spotify didn't start";
+      using = "spotify-failed"; startChimes(); $("rNow").textContent = why + ", so playing chimes";
+    }
+  }
+
+  function startSound(){
+    ringStart = Date.now();
+    if (S.src==="radio") startRadio(); else if (S.src==="songs") startSongs(); else if (S.src==="spotify") startSpotify(); else startChimes();
+    rampVolume();
+  }
+  function stopSound(){
+    clearInterval(chimeTimer); chimeTimer = null;
+    if (master && ac) master.gain.setTargetAtTime(0, ac.currentTime, 0.2);
+    if (spDev){ SP.api("PUT", `/me/player/pause?device_id=${spDev}`).catch(()=>{}); spDev = null; }
+    stopPlayer(); using = null;
+  }
+  function rampVolume(){
+    if (!using) return;
+    const frac = Math.min(1, 0.06 + (Date.now()-ringStart)/(S.fade*60000));
+    const v = frac * S.vol/100;
+    if (using==="chimes"){ if (master && ac) master.gain.setTargetAtTime(v, ac.currentTime, 0.5); }
+    else if (using==="spotify"){
+      // Spotify volume is set over the internet, so step it every 10 s rather than every second
+      const pct = Math.round(Math.max(5, v*100));
+      if (spDev && pct !== spLastVol && Date.now()-spLastSet > 10000){
+        spLastVol = pct; spLastSet = Date.now();
+        SP.api("PUT", `/me/player/volume?volume_percent=${pct}&device_id=${spDev}`).catch(()=>{});
+      }
+    }
+    else if (using==="radio" || using==="songs") player.volume = Math.max(0, Math.min(1, v));
+  }
+
+  // test button: plays 15 s at the chosen max volume
+  let testTimer = null;
+  $("testSound").onclick = () => {
+    if (using){ stopSound(); clearTimeout(testTimer); $("testState").textContent=""; $("testSound").textContent="▶ Test sound"; return; }
+    initAudio(); startSound(); ringStart = Date.now() - S.fade*60000; rampVolume();
+    $("testSound").textContent = "■ Stop";
+    const tick = setInterval(()=>{ rampVolume(); $("testState").textContent = $("rNow").textContent || (using==="chimes"?"Chimes":"Starting…"); if (!using) clearInterval(tick); }, 500);
+    testTimer = setTimeout(()=>{ stopSound(); $("testSound").textContent="▶ Test sound"; $("testState").textContent=""; }, 15000);
+  };
+
+  // ---------- Colours ----------
+  const hex = h => [1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
+  const mix = (a,b,t) => { t=Math.max(0,Math.min(1,t)); const A=hex(a),B=hex(b); return "#"+A.map((v,i)=>Math.round(v+(B[i]-v)*t).toString(16).padStart(2,"0")).join(""); };
+  function ramp(stops, p){ for (let i=1;i<stops.length;i++){ if (p<=stops[i][0]){ const [p0,c0]=stops[i-1],[p1,c1]=stops[i]; return mix(c0,c1,(p-p0)/(p1-p0||1)); } } return stops[stops.length-1][1]; }
+  const SKY  = [[0,"#000000"],[.25,"#0a0100"],[.5,"#3a0d02"],[.7,"#a8400f"],[.85,"#f59a4a"],[1,"#fff1d6"]];
+  const GLOW = [[0,"#000000"],[.15,"#2c0600"],[.4,"#a3260a"],[.65,"#ff7a26"],[.85,"#ffc979"],[1,"#fff8ea"]];
+  const NIGHT_CLOCK = ["#1e0d05","#3a1c0a","#5a2c12","#7a3d18","#a0552a","#c87a45"];
+  const root = document.documentElement.style;
+  function setSunrise(p){
+    root.setProperty("--sky", ramp(SKY,p)); root.setProperty("--glow", ramp(GLOW,p));
+    root.setProperty("--sunY", (140 - p*95) + "%"); root.setProperty("--sunR", (20 + p*160) + "%");
+    const base = NIGHT_CLOCK[S.dim-1];
+    root.setProperty("--clock", p<.55 ? mix(base,"#ffb37a",p/.55*.6) : mix("#c27a48","#5a2c10",(p-.55)/.45));
+  }
+
+  // ---------- State machine ----------
+  let mode = "setup", alarmAt = null, sunriseStart = null, snoozeUntil = null, preview = false, lastShift = 0, wxFetchedAtSunrise = false;
+  const show = id => document.querySelectorAll(".screen").forEach(s=>s.classList.toggle("on", s.id===id));
+
+  function enterNight(isPreview){
+    if (using) stopSound();
+    preview = !!isPreview;
+    const now = new Date();
+    if (preview){ alarmAt = new Date(now.getTime()+60000); sunriseStart = new Date(now.getTime()+2000); }
+    else {
+      alarmAt = nextAlarm(now);
+      if (!alarmAt){ toast("Pick a time first"); return; }
+      sunriseStart = new Date(alarmAt.getTime() - S.dur*60000);
+    }
+    wxFetchedAtSunrise = false;
+    if (S.src==="spotify") SP.findDevice().then(d=>{ if (!d) toast("Spotify can't see your speaker. Open Spotify once, or it'll use the chimes."); }).catch(()=>toast("Couldn't reach Spotify. It'll use the chimes if needed."));
+    initAudio(); grabWake().then(statusText);
+    try { document.documentElement.requestFullscreen && document.documentElement.requestFullscreen().catch(()=>{}); } catch(e){}
+    mode = "night"; show("night"); tick();
+  }
+
+  function tick(){
+    const now = new Date();
+    if (mode==="night"){
+      const p = now < sunriseStart ? 0 : Math.min(1,(now-sunriseStart)/(alarmAt-sunriseStart));
+      setSunrise(p);
+      $("nClock").textContent = fmt(now);
+      $("nInfo").textContent = p>0 ? "Rise and shine…" : `⏰ ${fmtAP(alarmAt)}`;
+      if (p===0 && now-lastShift > 120000){ lastShift = +now; $("clockWrap").style.transform = `translate(${(Math.random()*40-20)|0}px,${(Math.random()*60-30)|0}px)`; }
+      if (p>0){ $("clockWrap").style.transform = "none"; if (!wxFetchedAtSunrise){ wxFetchedAtSunrise = true; getWeather(true); } }
+      if (now >= alarmAt) enterRing();
+    } else if (mode==="ring"){
+      $("rClock").textContent = fmt(now);
+      rampVolume();
+      if (Date.now()-ringStart > 30*60000) enterMorning(); // give up after 30 min
+    } else if (mode==="snooze"){
+      $("rClock").textContent = fmt(now);
+      const left = Math.max(0, Math.ceil((snoozeUntil-now)/1000));
+      $("rMsg").textContent = `Snoozing · ${Math.floor(left/60)}:${pad(left%60)}`;
+      if (now >= snoozeUntil) enterRing();
+    } else if (mode==="morning"){
+      $("mClock").textContent = fmt(now);
+    } else if (mode==="setup" && now.getSeconds()===0){ $("nextTxt").textContent = (S.days.length ? "" : "One-off · ") + describeAlarm(nextAlarm()); }
+  }
+  setInterval(tick, 1000);
+
+  function enterRing(){
+    mode = "ring"; show("ring");
+    $("rMsg").textContent = "Good morning";
+    $("snoozeBtn").textContent = `Snooze ${S.snooze} min`;
+    $("rClock").textContent = fmt(new Date());
+    startSound();
+  }
+  $("snoozeBtn").onclick = () => { stopSound(); snoozeUntil = new Date(Date.now() + (preview ? 15000 : S.snooze*60000)); mode = "snooze"; $("rNow").textContent=""; };
+  $("upBtn").onclick = () => { stopSound(); enterMorning(); };
+
+  // ---------- Morning ----------
+  function sunTimes(date){
+    const rad = Math.PI/180, y=date.getFullYear(), m=date.getMonth(), d=date.getDate();
+    const doy = Math.round((Date.UTC(y,m,d)-Date.UTC(y,0,0))/864e5), g = 2*Math.PI/365*(doy-1);
+    const eq = 229.18*(0.000075+0.001868*Math.cos(g)-0.032077*Math.sin(g)-0.014615*Math.cos(2*g)-0.040849*Math.sin(2*g));
+    const dec = 0.006918-0.399912*Math.cos(g)+0.070257*Math.sin(g)-0.006758*Math.cos(2*g)+0.000907*Math.sin(2*g)-0.002697*Math.cos(3*g)+0.00148*Math.sin(3*g);
+    const ha = Math.acos(Math.cos(90.833*rad)/(Math.cos(S.lat*rad)*Math.cos(dec)) - Math.tan(S.lat*rad)*Math.tan(dec))/rad;
+    const base = Date.UTC(y,m,d);
+    return { rise:new Date(base + (720-4*(S.lon+ha)-eq)*60000), set:new Date(base + (720-4*(S.lon-ha)-eq)*60000) };
+  }
+  function enterMorning(){
+    stopSound();
+    mode = "morning"; show("morning");
+    const now = new Date(), h = now.getHours();
+    $("mGreet").textContent = h<12 ? "Good morning" : h<17 ? "Good afternoon" : "Good evening";
+    $("mClock").textContent = fmt(now);
+    $("mDate").textContent = now.toLocaleDateString("en-AU",{weekday:"long", day:"numeric", month:"long"});
+    const st = sunTimes(now), len = Math.round((st.set-st.rise)/60000);
+    $("sRise").textContent = fmtAP(st.rise); $("sSet").textContent = fmtAP(st.set);
+    $("sLen").textContent = `${Math.floor(len/60)}h ${len%60}m`;
+    paintWeather();
+    $("todoCard").style.display = S.todoToken ? "" : "none";
+    if (S.todoToken) loadTasks();
+  }
+  $("mDone").onclick = () => { mode="setup"; show("setup"); paint(); paintTomorrow(); try{ document.fullscreenElement && document.exitFullscreen(); }catch(e){} };
+
+  // ---------- Todoist (your own API token) ----------
+  async function loadTasks(){
+    const ul = $("tasks"), note = $("tNote"); ul.innerHTML = ""; note.textContent = "Loading…";
+    const H = { Authorization: "Bearer " + S.todoToken };
+    let tasks = null;
+    try {
+      const r = await fetch("https://api.todoist.com/api/v1/tasks/filter?query=" + encodeURIComponent("today | overdue") + "&limit=20", { headers:H });
+      if (r.ok){ const j = await r.json(); tasks = j.results || j.items || (Array.isArray(j)?j:[]); }
+      else if (r.status===401 || r.status===403){ note.textContent = "Todoist didn't accept the token. Check it in settings."; return; }
+    } catch(e){}
+    if (!tasks){
+      try { const r = await fetch("https://api.todoist.com/rest/v2/tasks?filter=" + encodeURIComponent("today | overdue"), { headers:H }); if (r.ok) tasks = await r.json(); } catch(e){}
+    }
+    if (!tasks){ note.textContent = "Couldn't reach Todoist right now."; return; }
+    if (!tasks.length){ note.textContent = "Nothing due today. Enjoy it."; return; }
+    note.textContent = "";
+    const today = new Date().toLocaleDateString("en-CA");
+    tasks.sort((a,b)=>(b.priority||1)-(a.priority||1)).forEach(t=>{
+      const li = document.createElement("li");
+      const dot = document.createElement("span"); dot.className = "dot p" + (5-(t.priority||1));   // API 4 = p1 (urgent)
+      const tx = document.createElement("span"); const due = t.due && t.due.date ? t.due.date.slice(0,10) : "";
+      tx.textContent = t.content + (due && due < today ? "  (overdue)" : "");
+      li.append(dot, tx); ul.appendChild(li);
+    });
+  }
+
+  // ---------- Night controls ----------
+  let ctlTimer;
+  $("night").addEventListener("click", e => {
+    if (e.target.closest("#nControls")) return;
+    $("nControls").classList.add("show"); clearTimeout(ctlTimer);
+    ctlTimer = setTimeout(()=>$("nControls").classList.remove("show"), 5000);
+  });
+  $("nSettings").onclick = () => { mode="setup"; show("setup"); paint(); };
+  $("nCancel").onclick = () => { mode="setup"; show("setup"); paint(); toast("Alarm off"); };
+  $("goodnight").onclick = () => enterNight(false);
+  $("preview").onclick = () => enterNight(true);
+
+  paint(); paintSongs(); statusText(); paintTomorrow();
+  SP.handleRedirect();
+  if (SPT.refresh && S.src==="spotify") SP.listDevices();
+  if (!("wakeLock" in navigator)) { wakeOK=false; statusText(); }
+})();
+</script>
+</body>
+</html>
