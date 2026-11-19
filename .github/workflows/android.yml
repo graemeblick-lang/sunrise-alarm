@@ -26,18 +26,18 @@ jobs:
 
       - name: Signing key
         env:
-          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         run: |
-          if [ -n "$KEYSTORE_B64" ]; then
-            echo "$KEYSTORE_B64" | base64 -d > android/app/release.jks
+          # The keystore file is in the repo, locked with a password that only lives in a private GitHub secret.
+          if [ -n "$KEYSTORE_PASSWORD" ]; then
+            cp android/release.jks android/app/release.jks
             echo "KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
           else
             PASS=$(openssl rand -hex 16)
             keytool -genkeypair -keystore android/app/release.jks -alias sunrise -keyalg RSA -keysize 2048 \
               -validity 10000 -storepass "$PASS" -keypass "$PASS" -dname "CN=Sunrise Alarm"
             echo "KEYSTORE_PASSWORD=$PASS" >> "$GITHUB_ENV"
-            echo "::warning::No signing secret set, so this build uses a one-off key. Uninstall the old app before installing a new build."
+            echo "::warning::KEYSTORE_PASSWORD secret not set, so this build uses a one-off key. Uninstall the old app before installing it."
           fi
 
       - name: Build APK

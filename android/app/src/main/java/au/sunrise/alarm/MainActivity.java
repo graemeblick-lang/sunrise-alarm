@@ -41,6 +41,7 @@ public class MainActivity extends Activity {
     static final String APP_HOST = "graemeblick-lang.github.io";
 
     private WebView web;
+    private NativeAudio audio;
     private GeolocationPermissions.Callback geoCallback;
     private String geoOrigin;
 
@@ -69,6 +70,9 @@ public class MainActivity extends Activity {
 
         web = new WebView(this);
         web.setBackgroundColor(0xFF000000);
+        audio = new NativeAudio(this, ev -> runOnUiThread(() -> {
+            if (web != null) web.evaluateJavascript("window.nativeAudioEvent && window.nativeAudioEvent('" + ev + "')", null);
+        }));
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
@@ -130,6 +134,12 @@ public class MainActivity extends Activity {
             web.evaluateJavascript("window.nativeWake && window.nativeWake()", null);
             clearWakeNotification();
         }
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (audio != null) { audio.radioStop(); audio.musicRestore(); }
+        super.onDestroy();
     }
 
     @Override
@@ -210,6 +220,16 @@ public class MainActivity extends Activity {
             try { AlarmScheduler.schedule(MainActivity.this, (long) sunriseMs, (long) alarmMs); }
             catch (Throwable t) { App.save(MainActivity.this, "Scheduling the alarm", t); }
         }
+
+        // ----- audio -----
+        @JavascriptInterface public void radioPlay(String url, double volume) { runOnUiThread(() -> audio.radioPlay(url, (float) volume)); }
+        @JavascriptInterface public void radioVolume(double v) { runOnUiThread(() -> audio.radioVolume((float) v)); }
+        @JavascriptInterface public void radioStop() { runOnUiThread(() -> audio.radioStop()); }
+        /** Turns media volume down, then presses play in Spotify so it wakes up. */
+        @JavascriptInterface public boolean spotifyWake() { audio.musicFadeStart(); return audio.spotifyKey(android.view.KeyEvent.KEYCODE_MEDIA_PLAY); }
+        @JavascriptInterface public void spotifyPause() { audio.spotifyKey(android.view.KeyEvent.KEYCODE_MEDIA_PAUSE); }
+        @JavascriptInterface public void musicVolume(double f) { audio.setMusic((float) f); }
+        @JavascriptInterface public void musicRestore() { audio.musicRestore(); }
 
         @JavascriptInterface public void cancel() {
             try { AlarmScheduler.cancel(MainActivity.this); } catch (Throwable t) { App.save(MainActivity.this, "Cancelling the alarm", t); }

@@ -701,7 +701,21 @@
     return hlsLib;
   }
   // Try one link; resolves when sound is actually playing, rejects on error or after 10 s
+  const NATIVE_RADIO = !!(NATIVE && typeof NATIVE.radioPlay === "function");
+  let nativeWaiter = null, nativeRadioOn = false;
+  window.nativeAudioEvent = ev => {
+    if (nativeWaiter){ const w = nativeWaiter; nativeWaiter = null; ev === "playing" ? w.resolve() : w.reject(ev); return; }
+    if (nativeRadioOn && using === "radio" && (ev === "error" || ev === "ended")) fallBack(`${STATIONS[S.station][0]} dropped out, so playing chimes`);
+  };
+  function tryNative(u){
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(()=>{ nativeWaiter = null; reject("timeout"); }, 15000);
+      nativeWaiter = { resolve: ()=>{ clearTimeout(t); nativeRadioOn = true; resolve(); }, reject: why=>{ clearTimeout(t); reject(why); } };
+      try { NATIVE.radioPlay(u, 0.05); } catch(e){ clearTimeout(t); nativeWaiter = null; reject("native"); }
+    });
+  }
   function tryStream(u){
+    if (NATIVE_RADIO) return tryNative(u);
     return new Promise(async (resolve, reject) => {
       let done = false;
       const ok = () => { if (!done){ done = true; clearTimeout(t); resolve(); } };
@@ -722,7 +736,7 @@
       } catch(e){ bad(e && e.name === "NotAllowedError" ? "blocked" : "play"); }
     });
   }
-  function resetPlayer(){ if (hls){ try { hls.destroy(); } catch(e){} hls = null; } player.onplaying = player.onerror = null; try { player.pause(); } catch(e){} player.removeAttribute("src"); player.load(); }
+  function resetPlayer(){ if (NATIVE_RADIO && nativeRadioOn !== null){ try { NATIVE.radioStop(); } catch(e){} nativeRadioOn = false; nativeWaiter = null; } if (hls){ try { hls.destroy(); } catch(e){} hls = null; } player.onplaying = player.onerror = null; try { player.pause(); } catch(e){} player.removeAttribute("src"); player.load(); }
   function fallBack(why){ if (using==="chimes") return; stopPlayer(); startChimes(); $("rNow").textContent = why; }
   function stopPlayer(){ clearTimeout(fallbackTimer); player.onended = null; resetPlayer(); if (songUrl){ URL.revokeObjectURL(songUrl); songUrl=null; } }
   function armFallback(why){ clearTimeout(fallbackTimer); fallbackTimer = setTimeout(()=>{ if (player.paused || player.readyState<3) fallBack(why); }, 12000); }
@@ -741,7 +755,7 @@
         if (using !== "radio"){ resetPlayer(); return; }
         $("rNow").textContent = "📻 " + name;
         // if the stream drops later, fall back so you're never left in silence
-        player.onerror = () => fallBack(`${name} dropped out, so playing chimes`);
+        if (!NATIVE_RADIO) player.onerror = () => fallBack(`${name} dropped out, so playing chimes`);
         return;
       } catch(why){ lastWhy = why; resetPlayer(); }
     }
@@ -760,17 +774,33 @@
   async function startSongs(){ using = "songs"; player.volume = 0.05; songQueue = []; await playNextSong(); }
 
   let spDev = null, spLastVol = -1, spLastSet = 0;
+  const NATIVE_SP = !!(NATIVE && typeof NATIVE.spotifyWake === "function");
+  let spNativeFade = false;
+  const sleep = ms => new Promise(r=>setTimeout(r, ms));
   async function startSpotify(){
-    using = "spotify"; spDev = null; spLastVol = -1;
+    using = "spotify"; spDev = null; spLastVol = -1; spNativeFade = false;
     $("rNow").textContent = "Starting Spotify…";
     const body = SP.parseLink(S.spLink);
     try {
       if (!SPT.refresh) throw "login";
       if (!body) throw "link";
-      const d = await SP.findDevice();
+      let d = null;
+      if (NATIVE_SP){
+        // Turn media volume down, wake the Spotify app, then wait for it to appear as a speaker
+        let woke = false; try { woke = NATIVE.spotifyWake(); } catch(e){}
+        if (woke) spNativeFade = true;
+        for (let i = 0; i < 14 && !d; i++){
+          if (using !== "spotify") return;
+          try { d = await SP.findDevice(); } catch(e){}
+          if (!d) await sleep(1500);
+        }
+      } else {
+        d = await SP.findDevice();
+      }
       if (!d) throw "device";
       if (using !== "spotify") return;               // snoozed/stopped while we were waiting
-      const initPct = Math.round(Math.max(5, Math.min(1, 0.06 + (Date.now()-ringStart)/(S.fade*60000)) * S.vol));
+      // With the app's native fade, Spotify plays at full and the phone's media volume does the fading
+      const initPct = spNativeFade ? 100 : Math.round(Math.max(5, Math.min(1, 0.06 + (Date.now()-ringStart)/(S.fade*60000)) * S.vol));
       await SP.api("PUT", `/me/player/volume?volume_percent=${initPct}&device_id=${d.id}`).catch(()=>{});
       await SP.api("PUT", `/me/player/play?device_id=${d.id}`, body);
       await SP.api("PUT", `/me/player/shuffle?state=${S.spShuffle}&device_id=${d.id}`).catch(()=>{});
@@ -781,6 +811,7 @@
       if (using !== "spotify") return;
       const why = e==="login" ? "Spotify isn't connected" : e==="link" ? "No Spotify playlist set" :
                   e==="device" ? "Spotify isn't showing this phone" : "Spotify didn't start";
+      if (spNativeFade){ try { NATIVE.spotifyPause(); NATIVE.musicRestore(); } catch(e){} spNativeFade = false; }
       using = "spotify-failed"; startChimes(); $("rNow").textContent = why + ", so playing chimes";
     }
   }
@@ -794,6 +825,7 @@
     clearInterval(chimeTimer); chimeTimer = null;
     if (master && ac) master.gain.setTargetAtTime(0, ac.currentTime, 0.2);
     if (spDev){ SP.api("PUT", `/me/player/pause?device_id=${spDev}`).catch(()=>{}); spDev = null; }
+    if (spNativeFade){ try { NATIVE.spotifyPause(); NATIVE.musicRestore(); } catch(e){} spNativeFade = false; }
     stopPlayer(); using = null;
   }
   function rampVolume(){
@@ -801,6 +833,7 @@
     const frac = Math.min(1, 0.06 + (Date.now()-ringStart)/(S.fade*60000));
     const v = frac * S.vol/100;
     if (using==="chimes"){ if (master && ac) master.gain.setTargetAtTime(v, ac.currentTime, 0.5); }
+    else if (using==="spotify" && spNativeFade){ try { NATIVE.musicVolume(Math.max(0.07, v)); } catch(e){} }
     else if (using==="spotify"){
       // Spotify volume is set over the internet, so step it every 10 s rather than every second
       const pct = Math.round(Math.max(5, v*100));
@@ -809,6 +842,7 @@
         SP.api("PUT", `/me/player/volume?volume_percent=${pct}&device_id=${spDev}`).catch(()=>{});
       }
     }
+    else if (using==="radio" && NATIVE_RADIO){ try { NATIVE.radioVolume(v); } catch(e){} }
     else if (using==="radio" || using==="songs") player.volume = Math.max(0, Math.min(1, v));
   }
 
