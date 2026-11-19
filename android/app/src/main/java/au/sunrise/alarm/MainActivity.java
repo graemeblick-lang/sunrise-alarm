@@ -20,6 +20,16 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.RenderProcessGoneDetail;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.graphics.Typeface;
+import java.io.File;
+import java.nio.file.Files;
 
 /**
  * A thin Android shell around the Sunrise Alarm web app.
@@ -37,6 +47,17 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle saved) {
         super.onCreate(saved);
+        File crash = new File(getFilesDir(), App.CRASH_FILE);
+        if (crash.exists()) { showReport(crash); return; }
+        try {
+            start();
+        } catch (Throwable t) {
+            App.save(this, "Starting up", t);
+            showReport(crash);
+        }
+    }
+
+    private void start() {
         if (Build.VERSION.SDK_INT >= 27) {
             setShowWhenLocked(true);
             setTurnScreenOn(true);
@@ -44,7 +65,7 @@ public class MainActivity extends Activity {
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON);
         }
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        goFullscreen();
+        try { goFullscreen(); } catch (Exception ignored) { }
 
         web = new WebView(this);
         web.setBackgroundColor(0xFF000000);
@@ -69,6 +90,14 @@ public class MainActivity extends Activity {
                 }
                 return false;   // Spotify login and the app itself stay inside
             }
+
+            @Override
+            public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
+                // The page's engine stopped; restart cleanly instead of letting Android close the app
+                App.save(MainActivity.this, "WebView renderer stopped (crashed: " + detail.didCrash() + ")", new RuntimeException("Renderer gone"));
+                recreate();
+                return true;
+            }
         });
         web.setWebChromeClient(new WebChromeClient() {
             @Override
@@ -84,9 +113,11 @@ public class MainActivity extends Activity {
 
         setContentView(web);
 
-        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
-        }
+        try {
+            if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
+            }
+        } catch (Exception ignored) { }
 
         web.loadUrl(APP_URL + (isWake(getIntent()) ? "#wake" : ""));
         clearWakeNotification();
@@ -95,18 +126,54 @@ public class MainActivity extends Activity {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
-        if (isWake(intent)) {
+        if (web != null && isWake(intent)) {
             web.evaluateJavascript("window.nativeWake && window.nativeWake()", null);
             clearWakeNotification();
         }
     }
 
     @Override
-    protected void onResume() { super.onResume(); goFullscreen(); }
+    protected void onResume() { super.onResume(); try { goFullscreen(); } catch (Exception ignored) { } }
+
+    /** Shows what went wrong last time, with a button to copy it. */
+    private void showReport(File crash) {
+        String text;
+        try { text = new String(Files.readAllBytes(crash.toPath())); } catch (Exception e) { text = "Couldn't read the crash details: " + e; }
+        final String report = text;
+
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(40, 80, 40, 40);
+        box.setBackgroundColor(0xFF15110F);
+
+        TextView title = new TextView(this);
+        title.setText("Sunrise Alarm hit a problem last time.\nTap Copy and paste it to Claude.");
+        title.setTextColor(0xFFFFB36B); title.setTextSize(18); title.setPadding(0, 0, 0, 30);
+        box.addView(title);
+
+        LinearLayout buttons = new LinearLayout(this);
+        Button copy = new Button(this); copy.setText("Copy");
+        copy.setOnClickListener(v -> {
+            ((ClipboardManager) getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("Sunrise crash", report));
+            copy.setText("Copied ✓");
+        });
+        Button cont = new Button(this); cont.setText("Try again");
+        cont.setOnClickListener(v -> { crash.delete(); recreate(); });
+        buttons.addView(copy); buttons.addView(cont);
+        box.addView(buttons);
+
+        ScrollView sv = new ScrollView(this);
+        TextView body = new TextView(this);
+        body.setText(report); body.setTextColor(0xFFE8DCD0); body.setTextSize(11);
+        body.setTypeface(Typeface.MONOSPACE); body.setTextIsSelectable(true); body.setPadding(0, 30, 0, 0);
+        sv.addView(body);
+        box.addView(sv);
+        setContentView(box);
+    }
 
     @Override
     public void onBackPressed() {
-        if (web.canGoBack()) web.goBack(); else moveTaskToBack(true);
+        if (web != null && web.canGoBack()) web.goBack(); else moveTaskToBack(true);
     }
 
     @Override
@@ -140,10 +207,13 @@ public class MainActivity extends Activity {
     /** Functions the web page can call as window.Android.* */
     class Bridge {
         @JavascriptInterface public void schedule(double sunriseMs, double alarmMs) {
-            AlarmScheduler.schedule(MainActivity.this, (long) sunriseMs, (long) alarmMs);
+            try { AlarmScheduler.schedule(MainActivity.this, (long) sunriseMs, (long) alarmMs); }
+            catch (Throwable t) { App.save(MainActivity.this, "Scheduling the alarm", t); }
         }
 
-        @JavascriptInterface public void cancel() { AlarmScheduler.cancel(MainActivity.this); }
+        @JavascriptInterface public void cancel() {
+            try { AlarmScheduler.cancel(MainActivity.this); } catch (Throwable t) { App.save(MainActivity.this, "Cancelling the alarm", t); }
+        }
 
         /** 0..1 sets the screen brightness for this app; below 0 hands control back to the phone. */
         @JavascriptInterface public void setBrightness(final float v) {
