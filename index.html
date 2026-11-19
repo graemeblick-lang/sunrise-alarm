@@ -65,7 +65,7 @@
   #clockWrap{text-align:center;transition:transform 2s ease}
   #nClock{font-weight:200;font-size:min(30vw,190px);line-height:1;color:var(--clock);letter-spacing:-.02em;font-variant-numeric:tabular-nums}
   #nInfo{margin-top:10px;font-size:18px;color:var(--clock);opacity:.85}
-  #nControls{position:absolute;bottom:28px;left:0;right:0;display:none;justify-content:center;gap:12px}
+  #nControls{position:absolute;bottom:28px;left:12px;right:12px;display:none;justify-content:center;gap:10px;flex-wrap:wrap;z-index:6}
   #nControls.show{display:flex}
   #nControls button{padding:14px 20px;border-radius:14px;background:rgba(40,25,18,.85);color:#d9b89a;font-size:15px}
 
@@ -288,6 +288,9 @@
   <div class="card">
     <label class="t">Overnight clock brightness</label>
     <input type="range" id="dim" min="1" max="6" value="2">
+    <label class="t" style="margin-top:14px">Sunrise brightness</label>
+    <input type="range" id="sunMax" min="15" max="100" value="60">
+    <div class="hint" style="margin-top:0">How bright the screen gets by alarm time. It stays dim for most of the sunrise and brightens towards the end.</div>
   </div>
 
   <div class="card">
@@ -318,6 +321,8 @@
   </div>
   <div id="nightLight"><div id="nlNote">Tap anywhere to turn off</div></div>
   <div id="nControls">
+    <button id="nPlay">▶ Play radio</button>
+    <button id="nUp">☀ I'm up</button>
     <button id="nLight">💡 Night light</button>
     <button id="nSettings">Change alarm</button>
     <button id="nCancel">Turn off alarm</button>
@@ -390,7 +395,7 @@
   ];
   const DEF = { time:"06:30", days:[1,2,3,4,5], dur:30, src:"chimes", station:0, customUrl:"", vol:70, fade:3, snooze:9, dim:2,
                 lat:-37.814, lon:144.963, place:"Melbourne", willy:"", todoToken:"",
-                spClient:"", spLink:"", spShuffle:true, spDevice:null, spSimple:false, perDay:false, dayTimes:{}, theme:"sunrise", auto:true, skip:0 };
+                spClient:"", spLink:"", spShuffle:true, spDevice:null, spSimple:false, sunMax:60, perDay:false, dayTimes:{}, theme:"sunrise", auto:true, skip:0 };
   const NATIVE = (window.Android && typeof window.Android.schedule === "function") ? window.Android : null;
   // Spotify tokens are kept separately from settings
   let SPT = {};
@@ -523,6 +528,7 @@
   $("customUrl").onchange = e => { S.customUrl = e.target.value.trim(); save(); };
   $("vol").oninput = e => { S.vol=+e.target.value; save(); };
   $("dim").oninput = e => { S.dim=+e.target.value; save(); };
+  $("sunMax").oninput = e => { S.sunMax=+e.target.value; save(); };
   $("willy").onchange = e => { S.willy = e.target.value.trim(); save(); paint(); };
   $("todoToken").onchange = e => { S.todoToken = e.target.value.trim(); save(); };
 
@@ -591,7 +597,7 @@
     $("customUrl").style.display = STATIONS[S.station][1].length ? "none" : "";
     $("customUrl").value = S.customUrl;
     $("todoToken").value = S.todoToken;
-    $("vol").value = S.vol; $("dim").value = S.dim;
+    $("vol").value = S.vol; $("dim").value = S.dim; $("sunMax").value = S.sunMax;
     document.querySelectorAll('#setup input[type=range]').forEach(paintRange);
     $("locName").textContent = S.place;
     $("nextTxt").textContent = (S.days.length ? "" : "One-off · ") + describeAlarm(nextAlarm());
@@ -956,9 +962,11 @@
     if (spNativeFade){ try { NATIVE.spotifyPause(); NATIVE.musicRestore(); } catch(e){} spNativeFade = false; }
     stopPlayer(); using = null;
   }
+  let earlyPlay = false;
   function rampVolume(){
     if (!using) return;
-    const frac = Math.min(1, 0.06 + (Date.now()-ringStart)/(S.fade*60000));
+    let frac = Math.min(1, 0.06 + (Date.now()-ringStart)/(S.fade*60000));
+    if (earlyPlay && mode === "night") frac = Math.min(frac, 0.35);
     const v = frac * S.vol/100;
     if (using==="chimes"){ if (master && ac) master.gain.setTargetAtTime(v, ac.currentTime, 0.5); }
     else if (using==="spotify" && spNativeFade){ try { NATIVE.musicVolume(Math.max(0.07, v)); } catch(e){} }
@@ -989,8 +997,12 @@
   function mix(a,b,t){ t=Math.max(0,Math.min(1,t)); const A=hex(a),B=hex(b); return "#"+A.map((v,i)=>Math.round(v+(B[i]-v)*t).toString(16).padStart(2,"0")).join(""); }
   function ramp(stops, p){ for (let i=1;i<stops.length;i++){ if (p<=stops[i][0]){ const [p0,c0]=stops[i-1],[p1,c1]=stops[i]; return mix(c0,c1,(p-p0)/(p1-p0||1)); } } return stops[stops.length-1][1]; }
   const root = document.documentElement.style;
-  function setSunrise(p){
+  function setSunrise(pTime){
     const T = THEMES[S.theme] || THEMES.sunrise;
+    const cap = (S.sunMax||60)/100;
+    // Stay dim for most of the sunrise: colour follows a slow curve, and without backlight control
+    // the brightness setting also limits how far towards white the colours go
+    const p = Math.pow(pTime, 1.8) * (NATIVE ? 1 : (0.35 + 0.65*cap));
     root.setProperty("--sky", ramp(T.sky,p)); root.setProperty("--glow", ramp(T.glow,p));
     root.setProperty("--sunY", (140 - p*95) + "%"); root.setProperty("--sunR", (20 + p*160) + "%");
     // In the Android app the backlight does the dimming, so the clock can use a clearer colour
@@ -998,7 +1010,7 @@
     root.setProperty("--clock", p<.55 ? mix(base,T.clockMid,p/.55*.6) : mix(T.clockHi,T.clockEnd,(p-.55)/.45));
     if (NATIVE){
       const nightB = [0.004,0.008,0.015,0.03,0.06,0.1][S.dim-1];
-      bright(nlLevel ? (nlLevel===1 ? 0.3 : 0.8) : (p===0 ? nightB : nightB + (1-nightB)*Math.pow(p,1.3)));
+      bright(nlLevel ? (nlLevel===1 ? 0.3 : 0.8) : (pTime===0 ? nightB : nightB + Math.max(0, cap-nightB)*Math.pow(pTime,2.6)));
     }
   }
   let lastB = null;
@@ -1038,6 +1050,7 @@
       $("nInfo").textContent = p>0 ? "Rise and shine…" : `⏰ ${fmtAP(alarmAt)}`;
       if (p===0 && now-lastShift > 120000){ lastShift = +now; $("clockWrap").style.transform = `translate(${(Math.random()*40-20)|0}px,${(Math.random()*60-30)|0}px)`; }
       if (p>0){ if (nlLevel) nightLight(0); $("clockWrap").style.transform = "none"; if (!wxFetchedAtSunrise){ wxFetchedAtSunrise = true; getWeather(true); } }
+      if (using) rampVolume();
       if (now >= alarmAt) enterRing();
     } else if (mode==="ring"){
       $("rClock").textContent = fmt(now);
@@ -1059,7 +1072,10 @@
     $("rMsg").textContent = "Good morning";
     $("snoozeBtn").textContent = `Snooze ${S.snooze} min`;
     $("rClock").textContent = fmt(new Date());
-    startSound();
+    if (earlyPlay && using && using !== "spotify-failed"){
+      // Already playing: carry on from the current volume and keep fading up
+      ringStart = Date.now() - 0.29*S.fade*60000; earlyPlay = false;
+    } else { earlyPlay = false; startSound(); }
   }
   $("snoozeBtn").onclick = () => { stopSound(); snoozeUntil = new Date(Date.now() + (preview ? 15000 : S.snooze*60000)); mode = "snooze"; $("rNow").textContent=""; };
   $("upBtn").onclick = () => { stopSound(); enterMorning(); };
@@ -1121,6 +1137,7 @@
   let ctlTimer;
   $("night").addEventListener("click", e => {
     if (e.target.closest("#nControls")) return;
+    paintNightControls();
     $("nControls").classList.add("show"); clearTimeout(ctlTimer);
     ctlTimer = setTimeout(()=>$("nControls").classList.remove("show"), 5000);
   });
@@ -1144,9 +1161,25 @@
     nlLastTap = now;
     nlTapTimer = setTimeout(()=>nightLight(0), 360);
   });
-  $("nSettings").onclick = () => { nightLight(0); disarm(); mode="setup"; show("setup"); paint(); };
+  const playLabel = () => ({radio:"▶ Play radio", spotify:"▶ Play Spotify", songs:"▶ Play my songs"})[S.src] || "▶ Play chimes";
+  function paintNightControls(){
+    $("nPlay").textContent = earlyPlay && using ? "■ Stop music" : playLabel();
+    $("nPlay").style.display = S.src === "chimes" ? "none" : "";
+  }
+  $("nPlay").onclick = e => {
+    e.stopPropagation();
+    if (earlyPlay && using){ stopSound(); earlyPlay = false; }
+    else { initAudio(); earlyPlay = true; startSound(); }
+    paintNightControls();
+  };
+  $("nUp").onclick = e => {
+    e.stopPropagation(); nightLight(0); earlyPlay = false;
+    if (!preview && alarmAt){ S.skip = +alarmAt; save(); }   // don't let this alarm go off later
+    enterMorning();
+  };
+  $("nSettings").onclick = () => { nightLight(0); disarm(); if (using) stopSound(); earlyPlay = false; mode="setup"; show("setup"); paint(); };
   $("nCancel").onclick = () => {
-    nightLight(0); disarm();
+    nightLight(0); disarm(); if (using) stopSound(); earlyPlay = false;
     if (!preview && alarmAt){ S.skip = +alarmAt; save(); }
     mode="setup"; show("setup"); paint(); toast(S.days.length ? "This alarm is off. Repeats stay on." : "Alarm off");
   };
