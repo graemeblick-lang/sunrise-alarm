@@ -386,7 +386,9 @@
     <div class="card">
       <label class="t">Music before the alarm</label>
       <div class="chips" id="earlyChips"></div>
-      <div class="hint" id="earlyHint" style="margin-top:8px">Starts your music quietly before alarm time, then fades it up when the alarm goes off. You can still start it any time by tapping the screen.</div>
+      <div class="row" style="margin-top:12px"><span>Volume before the alarm</span><span id="earlyVolTxt" class="pill"></span></div>
+      <input type="range" id="earlyVol" min="5" max="100" value="25">
+      <div class="hint" id="earlyHint" style="margin-top:0">Music started before alarm time (automatically, or by tapping the screen) fades in to this volume and stays there. At alarm time it rises to your max volume.</div>
     </div>
   </div>
 
@@ -551,7 +553,7 @@
   const curStation = () => { const l = stationList(); return l[S.station] || l[0]; };
   const DEF = { time:"06:30", days:[1,2,3,4,5], dur:30, src:"chimes", station:0, customUrl:"", vol:70, fade:3, snooze:9, dim:2,
                 lat:-37.814, lon:144.963, place:"Melbourne", willy:"", todoToken:"", myStations:[],
-                spClient:"", spLink:"", spShuffle:true, spDevice:null, spSimple:false, spAppOk:false, appPkg:"", appName:"", earlyMin:0, sunMax:60, sunCustom:false, sunCols:["#3a0d02","#ff7a26","#fff1d6"], pauseUntil:"", perDay:false, dayTimes:{}, theme:"sunrise", auto:true, skip:0 };
+                spClient:"", spLink:"", spShuffle:true, spDevice:null, spSimple:false, spAppOk:false, appPkg:"", appName:"", earlyMin:0, earlyVol:25, sunMax:60, sunCustom:false, sunCols:["#3a0d02","#ff7a26","#fff1d6"], pauseUntil:"", perDay:false, dayTimes:{}, theme:"sunrise", auto:true, skip:0 };
   const NATIVE = (window.Android && typeof window.Android.schedule === "function") ? window.Android : null;
   // Spotify tokens are kept separately from settings
   let SPT = {};
@@ -709,6 +711,8 @@
   $("vol").oninput = e => { S.vol=+e.target.value; save(); };
   $("dim").oninput = e => { S.dim=+e.target.value; save(); };
   $("sunMax").oninput = e => { S.sunMax=+e.target.value; save(); };
+  $("earlyVol").oninput = e => { S.earlyVol=+e.target.value; $("earlyVolTxt").textContent = S.earlyVol + "%"; save();
+    if (earlyPlay && mode==="night" && using && !userVol) rampVolume(); };
   $("sunCustomTgl").onclick = () => { S.sunCustom = !S.sunCustom; save(); paint(); };
   ["sunC0","sunC1","sunC2"].forEach((id,i)=>{ $(id).oninput = e => { S.sunCols = S.sunCols.map((c,j)=> j===i ? e.target.value : c); save(); paintSunCustom(); }; });
   SUN_PRESETS.forEach(([name, cols]) => {
@@ -786,6 +790,7 @@
     }
     [...$("earlyChips").children].forEach(b=>b.classList.toggle("sel", +b.dataset.v === +S.earlyMin));
     $("earlyHint").style.display = S.src==="chimes" ? "none" : "";
+    $("earlyVol").value = S.earlyVol; $("earlyVolTxt").textContent = S.earlyVol + "%";
     const spOn = !!SPT.refresh;
     const simpleOK = !!(NATIVE && typeof NATIVE.spotifyWake === "function");
     $("spSimpleRow").style.display = simpleOK ? "" : "none";
@@ -1373,9 +1378,11 @@
   let earlyPlay = false, earlyStopped = false;
   function rampVolume(){
     if (!using || userVol) return;
-    let frac = Math.min(1, 0.06 + (Date.now()-ringStart)/(S.fade*60000));
-    if (earlyPlay && mode === "night") frac = Math.min(frac, 0.35);
-    applyVol(frac * S.vol/100);
+    const frac = Math.min(1, 0.06 + (Date.now()-ringStart)/(S.fade*60000));
+    let v = frac * S.vol/100;
+    // Before alarm time, fade in only as far as your chosen "volume before the alarm"
+    if (earlyPlay && mode === "night") v = Math.min(Math.min(1, 0.06 + (Date.now()-ringStart)/(S.fade*60000)) * S.earlyVol/100, S.earlyVol/100);
+    applyVol(v);
   }
   let curVol = 0, userVol = false;
   // Phone volume buttons (Android app): take over from the automatic fade
