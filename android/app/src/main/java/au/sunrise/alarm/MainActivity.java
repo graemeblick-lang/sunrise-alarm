@@ -42,6 +42,7 @@ public class MainActivity extends Activity {
 
     private WebView web;
     private NativeAudio audio;
+    private volatile boolean captureVolume = false;
     private GeolocationPermissions.Callback geoCallback;
     private String geoOrigin;
 
@@ -134,6 +135,22 @@ public class MainActivity extends Activity {
             web.evaluateJavascript("window.nativeWake && window.nativeWake()", null);
             clearWakeNotification();
         }
+    }
+
+    @Override
+    public boolean onKeyDown(int keyCode, android.view.KeyEvent event) {
+        boolean up = keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP, down = keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN;
+        if (captureVolume && web != null && (up || down)) {
+            web.evaluateJavascript("window.nativeVolumeKey && window.nativeVolumeKey('" + (up ? "up" : "down") + "')", null);
+            return true;
+        }
+        return super.onKeyDown(keyCode, event);
+    }
+
+    @Override
+    public boolean onKeyUp(int keyCode, android.view.KeyEvent event) {
+        if (captureVolume && (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP || keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN)) return true;
+        return super.onKeyUp(keyCode, event);
     }
 
     @Override
@@ -235,6 +252,9 @@ public class MainActivity extends Activity {
             }
             return sb.append('}').toString();
         }
+
+        /** While the alarm's music plays, the phone's volume buttons control it. */
+        @JavascriptInterface public void captureVolumeKeys(boolean on) { captureVolume = on; }
 
         // ----- audio -----
         @JavascriptInterface public void radioPlay(String url, double volume) { runOnUiThread(() -> audio.radioPlay(url, (float) volume)); }

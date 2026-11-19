@@ -186,6 +186,8 @@
 
   /* Text fields */
   #setup input[type=text],#setup input[type=url],#setup input[type=password],#setup select{background:transparent;border:1px solid var(--md-outline);border-radius:4px;height:56px;padding:0 16px;font:16px "Roboto Flex",sans-serif;color:var(--md-on-surface)}
+  #setup input,#setup select{color-scheme:dark}
+  #setup input[type=date]{height:44px;padding:0 10px;border:1px solid var(--md-outline);border-radius:4px;background:transparent;color:var(--md-on-surface);font:15px "Roboto Flex",sans-serif}
   #setup input:focus,#setup select:focus{outline:none;border:2px solid var(--md-primary);padding:0 15px}
 
   /* Buttons */
@@ -202,6 +204,33 @@
   #setup .dt input{color:var(--md-on-surface);font-family:"Roboto Flex",sans-serif}
   #setup #songList{color:var(--md-on-surface-var)}
   #setup .fc{color:var(--md-on-surface)}
+
+  /* ---- settings pages ---- */
+  #setup .page{display:none}
+  #setup .page.on{display:block;animation:pageIn .22s cubic-bezier(.2,0,0,1)}
+  @keyframes pageIn{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}}
+  #setup .appbar{display:flex;align-items:center;gap:6px}
+  #setup .appbar .back{display:none;width:48px;height:48px;border-radius:24px;background:transparent;color:var(--md-on-surface);font-size:24px;flex:none;margin-left:-12px}
+  #setup.sub .appbar .back{display:block}
+  #setup.sub .appbar h1{font-size:22px;line-height:28px}
+  #setup.sub .appbar .sub{display:none}
+  #setup .list{background:var(--md-container);border-radius:24px;overflow:hidden;margin:16px 0 12px}
+  #setup .li{display:flex;align-items:center;gap:16px;width:100%;min-height:72px;padding:12px 16px;background:transparent;text-align:left;color:var(--md-on-surface);border-top:1px solid var(--md-outline-var)}
+  #setup .li:first-child{border-top:0}
+  #setup .li:active{background:var(--md-container-high)}
+  #setup .li .ic{width:40px;height:40px;border-radius:20px;background:var(--md-secondary-container);display:grid;place-items:center;font-size:20px;flex:none}
+  #setup .li .tx{flex:1;min-width:0;display:flex;flex-direction:column}
+  #setup .li b{font:400 16px/24px "Roboto Flex",sans-serif}
+  #setup .li small{font-size:14px;line-height:20px;color:var(--md-on-surface-var);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #setup .li .chev{font-size:24px;color:var(--md-on-surface-var)}
+  #setup .page[data-page=main] > .big{margin-top:0;margin-bottom:8px}
+  @media (orientation:landscape) and (max-height:600px){
+    #setup .page.on{max-width:760px;margin:0 auto}
+  }
+  .volhud{position:fixed;left:50%;top:24px;transform:translateX(-50%);z-index:20;background:rgba(20,16,14,.88);color:#f3e2d2;border-radius:24px;padding:10px 18px;font:500 15px "Roboto Flex",sans-serif;display:flex;align-items:center;gap:10px;opacity:0;transition:opacity .2s;pointer-events:none}
+  .volhud.show{opacity:1}
+  .volhud .bar{width:120px;height:6px;border-radius:3px;background:rgba(255,255,255,.2);overflow:hidden}
+  .volhud .bar i{display:block;height:100%;background:var(--amber)}
   .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#2a1d17;color:#f3d8bd;padding:12px 18px;border-radius:12px;font-size:14px;opacity:0;transition:.3s;pointer-events:none;z-index:9;max-width:90vw;text-align:center}
   .toast.show{opacity:1}
 </style>
@@ -210,117 +239,136 @@
 
 <!-- SETUP -->
 <section id="setup" class="screen on">
-  <header class="appbar"><h1>Sunrise</h1><div class="sub">Wake up to light, not noise.</div></header>
+  <header class="appbar">
+    <button class="back" id="pageBack" aria-label="Back">←</button>
+    <div class="titles"><h1 id="pageTitle">Sunrise</h1><div class="sub" id="pageSub">Wake up to light, not noise.</div></div>
+  </header>
 
-  <div class="hero">
-    <div class="timebox"><input id="alarmTime" type="time" value="06:30"></div>
-    <div class="nexttxt" id="nextTxt"></div>
-  </div>
-  <div class="card" id="autoCard" style="display:none">
-    <div class="row"><span>Wake me automatically</span><div class="toggle" id="autoTgl"></div></div>
-    <div class="hint" style="margin-top:2px">The app opens itself and starts the sunrise, even if you were watching YouTube or the screen was off. No need to tap Goodnight.</div>
-  </div>
-
-  <div class="card">
-    <label class="t">Pause alarms</label>
-    <div class="row"><span>Until (inclusive)</span><input type="date" id="pauseUntil" style="width:auto;flex:1;max-width:190px;margin:0"></div>
-    <div class="chips btnrow" style="margin-top:8px"><button class="small" id="pause1">Tomorrow</button><button class="small" id="pause7">1 week</button><button class="small" id="pauseClear">Clear</button></div>
-  </div>
-
-  <div class="card">
-    <label class="t">Repeat</label>
-    <div class="chips days" id="days"></div>
-    <div class="row" style="margin-top:10px"><span>Different time each day</span><div class="toggle" id="perDayTgl"></div></div>
-    <div id="dayTimes"></div>
-  </div>
-
-  <div class="card">
-    <label class="t">Sunrise starts before alarm</label>
-    <div class="chips" id="durChips"></div>
-  </div>
-
-  <div class="card">
-    <label class="t">Wake-up sound</label>
-    <div class="chips" id="srcChips"></div>
-
-    <div class="sub-panel" id="radioPanel">
-      <select id="station"></select>
-      <input type="url" id="customUrl" placeholder="Paste a stream link (https://…)">
-      <div class="hint">Needs internet. If the stream won't play, it falls back to the chimes.</div>
+  <div class="page on" data-page="main">
+    <div class="hero">
+      <div class="timebox"><input id="alarmTime" type="time" value="06:30"></div>
+      <div class="nexttxt" id="nextTxt"></div>
+    </div>
+    <div class="card" id="autoCard" style="display:none">
+      <div class="row"><span>Wake me automatically</span><div class="toggle" id="autoTgl"></div></div>
+      <div class="hint" style="margin-top:2px">The app opens itself and starts the sunrise, even if you were watching YouTube or the screen was off. No need to tap Goodnight.</div>
     </div>
 
-    <div class="sub-panel" id="songsPanel">
-      <div id="songList">No songs added yet.</div>
-      <div class="chips btnrow">
-        <button class="small" id="addSongs">Add songs from phone</button>
-        <button class="small" id="clearSongs">Clear</button>
-      </div>
-      <input type="file" id="songFile" accept="audio/*" multiple hidden>
-      <div class="hint">Songs are saved inside the app, so they play even without internet. They play in shuffled order.</div>
+    <button class="big primary" id="goodnight">Goodnight</button>
+    <button class="big ghost" id="preview">Preview the sunrise (1 minute)</button>
+
+    <div class="list">
+      <button class="li" data-go="alarm"><span class="ic">⏰</span><span class="tx"><b>Alarm &amp; schedule</b><small id="sumAlarm"></small></span><span class="chev">›</span></button>
+      <button class="li" data-go="sound"><span class="ic">🔊</span><span class="tx"><b>Wake-up sound</b><small id="sumSound"></small></span><span class="chev">›</span></button>
+      <button class="li" data-go="look"><span class="ic">🎨</span><span class="tx"><b>Look &amp; brightness</b><small id="sumLook"></small></span><span class="chev">›</span></button>
+      <button class="li" data-go="morning"><span class="ic">☀️</span><span class="tx"><b>Morning screen</b><small id="sumMorning"></small></span><span class="chev">›</span></button>
     </div>
 
-    <div class="sub-panel" id="spotifyPanel">
-      <div id="spSimpleRow">
-        <div class="row"><span>Simple mode (no login)</span><div class="toggle" id="spSimpleTgl"></div></div>
-        <div class="hint" style="margin:0 0 10px">Presses play in the Spotify app and fades it in, so it plays whatever you last had on. Queue your wake-up playlist in Spotify before bed. Also used automatically as a backup if the connected mode can't start.</div>
-      </div>
-      <div id="spState" class="hint" style="margin-top:0"></div>
-      <div id="spSetup">
-        <input type="text" id="spClient" placeholder="Spotify Client ID" autocomplete="off">
-        <div class="hint">Redirect URI to paste into Spotify: <b id="spRedirect" style="user-select:text;color:#e8c9a8;font-weight:400"></b></div>
-        <div class="chips btnrow" style="margin-top:8px"><button class="small" id="spConnect">Connect Spotify</button></div>
-      </div>
-      <div id="spReady">
-        <input type="url" id="spLink" placeholder="Paste a Spotify playlist, album or song link">
-        <div class="row"><span>Shuffle</span><div class="toggle" id="spShuffle"></div></div>
-        <div style="font-size:14px;color:var(--muted);margin-top:4px">Play on</div>
-        <div class="chips" id="spDevices" style="margin-top:6px"></div>
-        <div class="chips btnrow" style="margin-top:8px"><button class="small" id="spFind">Find speakers</button><button class="small" id="spLogout">Disconnect</button></div>
-        <div class="hint">Open Spotify on this phone first so it shows up. For reliability set Spotify's battery use to <b>Unrestricted</b> (long-press the Spotify icon → App info → Battery). If Spotify doesn't start, it falls back to the chimes.</div>
-      </div>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div class="page" data-page="alarm" data-title="Alarm &amp; schedule">
+    <div class="card">
+      <label class="t">Repeat</label>
+      <div class="chips days" id="days"></div>
+      <div class="row" style="margin-top:10px"><span>Different time each day</span><div class="toggle" id="perDayTgl"></div></div>
+      <div id="dayTimes"></div>
     </div>
-
-    <div class="row" style="margin-top:10px"><button class="small" id="testSound">▶ Test sound</button><span id="testState" class="hint" style="margin:0"></span></div>
-
-    <div style="margin-top:10px">
-      <span style="font-size:14px;color:var(--muted)">Max volume</span>
-      <input type="range" id="vol" min="10" max="100" value="70">
+    <div class="card">
+      <label class="t">Sunrise starts before alarm</label>
+      <div class="chips" id="durChips"></div>
     </div>
-    <div class="row"><span>Fade in over</span><div class="chips" id="fadeChips"></div></div>
-    <div class="row"><span>Snooze</span><div class="chips" id="snzChips"></div></div>
+    <div class="card">
+      <label class="t">Snooze</label>
+      <div class="chips" id="snzChips"></div>
+    </div>
+    <div class="card">
+      <label class="t">Pause alarms</label>
+      <div class="row"><span>Until (inclusive)</span><input type="date" id="pauseUntil" style="width:auto;flex:1;max-width:190px;margin:0"></div>
+      <div class="chips btnrow" style="margin-top:8px"><button class="small" id="pause1">Tomorrow</button><button class="small" id="pause7">1 week</button><button class="small" id="pauseClear">Clear</button></div>
+    </div>
   </div>
 
-  <div class="card">
-    <label class="t">Colour theme</label>
-    <div class="themes" id="themes"></div>
+  <div class="page" data-page="sound" data-title="Wake-up sound">
+    <div class="card">
+      <label class="t">Play</label>
+      <div class="chips" id="srcChips"></div>
+
+      <div class="sub-panel" id="radioPanel">
+        <select id="station"></select>
+        <input type="url" id="customUrl" placeholder="Paste a stream link (https://…)">
+        <div class="hint">Needs internet. If the stream won't play, it falls back to the chimes.</div>
+      </div>
+
+      <div class="sub-panel" id="songsPanel">
+        <div id="songList">No songs added yet.</div>
+        <div class="chips btnrow">
+          <button class="small" id="addSongs">Add songs from phone</button>
+          <button class="small" id="clearSongs">Clear</button>
+        </div>
+        <input type="file" id="songFile" accept="audio/*" multiple hidden>
+        <div class="hint">Songs are saved inside the app, so they play even without internet. They play in shuffled order.</div>
+      </div>
+
+      <div class="sub-panel" id="spotifyPanel">
+        <div id="spSimpleRow">
+          <div class="row"><span>Simple mode (no login)</span><div class="toggle" id="spSimpleTgl"></div></div>
+          <div class="hint" style="margin:0 0 10px">Presses play in the Spotify app and fades it in, so it plays whatever you last had on. Queue your wake-up playlist in Spotify before bed. Also used automatically as a backup if the connected mode can't start.</div>
+        </div>
+        <div id="spState" class="hint" style="margin-top:0"></div>
+        <div id="spSetup">
+          <input type="text" id="spClient" placeholder="Spotify Client ID" autocomplete="off">
+          <div class="hint">Redirect URI to paste into Spotify: <b id="spRedirect" style="user-select:text;color:#e8c9a8;font-weight:400"></b></div>
+          <div class="chips btnrow" style="margin-top:8px"><button class="small" id="spConnect">Connect Spotify</button></div>
+        </div>
+        <div id="spReady">
+          <input type="url" id="spLink" placeholder="Paste a Spotify playlist, album or song link">
+          <div class="row"><span>Shuffle</span><div class="toggle" id="spShuffle"></div></div>
+          <div style="font-size:14px;color:var(--muted);margin-top:4px">Play on</div>
+          <div class="chips" id="spDevices" style="margin-top:6px"></div>
+          <div class="chips btnrow" style="margin-top:8px"><button class="small" id="spFind">Find speakers</button><button class="small" id="spLogout">Disconnect</button></div>
+          <div class="hint">Open Spotify on this phone first so it shows up. For reliability set Spotify's battery use to <b>Unrestricted</b> (long-press the Spotify icon → App info → Battery). If Spotify doesn't start, it falls back to the chimes.</div>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px"><button class="small" id="testSound">▶ Test sound</button><span id="testState" class="hint" style="margin:0"></span></div>
+
+      <div style="margin-top:10px">
+        <span style="font-size:14px;color:var(--muted)">Max volume</span>
+        <input type="range" id="vol" min="10" max="100" value="70">
+      </div>
+      <div class="row"><span>Fade in over</span><div class="chips" id="fadeChips"></div></div>
+    </div>
   </div>
 
-  <div class="card">
-    <label class="t">Overnight clock brightness</label>
-    <input type="range" id="dim" min="1" max="6" value="2">
-    <label class="t" style="margin-top:14px">Sunrise brightness</label>
-    <input type="range" id="sunMax" min="15" max="100" value="60">
-    <div class="hint" style="margin-top:0">How bright the screen gets by alarm time. It stays dim for most of the sunrise and brightens towards the end.</div>
+  <div class="page" data-page="look" data-title="Look &amp; brightness">
+    <div class="card">
+      <label class="t">Colour theme</label>
+      <div class="themes" id="themes"></div>
+    </div>
+    <div class="card">
+      <label class="t">Overnight clock brightness</label>
+      <input type="range" id="dim" min="1" max="6" value="2">
+      <label class="t" style="margin-top:14px">Sunrise brightness</label>
+      <input type="range" id="sunMax" min="15" max="100" value="60">
+      <div class="hint" style="margin-top:0">How bright the screen gets by alarm time. It stays dim for most of the sunrise and brightens towards the end.</div>
+    </div>
   </div>
 
-  <div class="card">
-    <label class="t">Weather location</label>
-    <div class="row"><span id="locName">Melbourne</span><button class="small" id="useLoc">Use my location</button></div>
-    <input type="url" id="willy" placeholder="Your WillyWeather page link (optional)">
-    <div class="hint">Location and links are saved only on this phone.</div>
-    <div class="fc" id="tmrw"></div>
+  <div class="page" data-page="morning" data-title="Morning screen">
+    <div class="card">
+      <label class="t">Weather location</label>
+      <div class="row"><span id="locName">Melbourne</span><button class="small" id="useLoc">Use my location</button></div>
+      <input type="url" id="willy" placeholder="Your WillyWeather page link (optional)">
+      <div class="hint">Location and links are saved only on this phone.</div>
+      <div class="fc" id="tmrw"></div>
+    </div>
+    <div class="card">
+      <label class="t">Todoist on the morning screen</label>
+      <input type="password" id="todoToken" placeholder="Paste your Todoist API token (optional)" autocomplete="off">
+      <div class="hint">Find it in Todoist → Settings → Integrations → Developer → API token. It's stored only on this phone.</div>
+    </div>
   </div>
-
-  <div class="card">
-    <label class="t">Todoist on the morning screen</label>
-    <input type="password" id="todoToken" placeholder="Paste your Todoist API token (optional)" autocomplete="off">
-    <div class="hint">Find it in Todoist → Settings → Integrations → Developer → API token. It's stored only on this phone.</div>
-  </div>
-
-  <button class="big primary" id="goodnight">Goodnight</button>
-  <button class="big ghost" id="preview">Preview the sunrise (1 minute)</button>
-
-  <div class="status" id="status"></div>
 </section>
 
 <!-- NIGHT + SUNRISE -->
@@ -394,6 +442,7 @@
 
 <audio id="player" preload="none" playsinline></audio>
 <div class="toast" id="toast"></div>
+<div class="volhud" id="volhud"><span>🔊</span><div class="bar"><i id="volbar"></i></div><span id="volpct"></span></div>
 
 <script>
 (() => {
@@ -628,10 +677,46 @@
     document.querySelectorAll('#setup input[type=range]').forEach(paintRange);
     $("locName").textContent = S.place;
     $("nextTxt").textContent = nextText();
+    paintSummaries();
     if (S.pauseUntil && S.pauseUntil < new Date().toLocaleDateString("en-CA")){ S.pauseUntil = ""; save(); }
     $("pauseUntil").value = S.pauseUntil;
     $("willyLink").href = /^https:\/\/(www\.)?willyweather\.com\.au\//.test(S.willy) ? S.willy : "https://www.willyweather.com.au/";
     $("willy").value = S.willy;
+  }
+
+  // ---------- Settings pages ----------
+  const PAGES = [...document.querySelectorAll("#setup .page")].map(p=>p.dataset.page);
+  function goPage(name, push){
+    if (!PAGES.includes(name)) name = "main";
+    document.querySelectorAll("#setup .page").forEach(p=>p.classList.toggle("on", p.dataset.page===name));
+    $("setup").classList.toggle("sub", name !== "main");
+    const pg = document.querySelector(`#setup .page[data-page="${name}"]`);
+    $("pageTitle").textContent = name === "main" ? "Sunrise" : pg.dataset.title;
+    $("setup").scrollTop = 0;
+    if (push && name !== "main") history.pushState({ page:name }, "", "#" + name);
+    paint();
+  }
+  document.querySelectorAll("#setup .li").forEach(b => b.onclick = () => goPage(b.dataset.go, true));
+  $("pageBack").onclick = () => { if (history.state && history.state.page) history.back(); else goPage("main", false); };
+  window.addEventListener("popstate", e => goPage(e.state && e.state.page ? e.state.page : "main", false));
+  const curPage = () => (document.querySelector("#setup .page.on")||{dataset:{page:"main"}}).dataset.page;
+  function daysText(){
+    const d = [...S.days].sort().join("");
+    if (!d) return "One-off";
+    if (d==="0123456") return "Every day";
+    if (d==="12345") return "Weekdays";
+    if (d==="06") return "Weekends";
+    return [1,2,3,4,5,6,0].filter(x=>S.days.includes(x)).map(x=>DAYL[x]).join(", ");
+  }
+  function paintSummaries(){
+    const paused = S.pauseUntil && S.pauseUntil >= new Date().toLocaleDateString("en-CA");
+    $("sumAlarm").textContent = (paused ? "Paused · " : "") + daysText() + (S.perDay ? " (own times)" : "") + ` · sunrise ${S.dur} min · snooze ${S.snooze} min`;
+    const st = STATIONS[S.station] ? STATIONS[S.station][0].replace("…","") : "Radio";
+    const src = S.src==="radio" ? "📻 " + st : S.src==="songs" ? "♪ Your songs" :
+                S.src==="spotify" ? ("Spotify" + ((S.spSimple || !SPT.refresh) ? " (simple)" : " · connected")) : "Chimes";
+    $("sumSound").textContent = `${src} · fade ${S.fade} min · max ${S.vol}%`;
+    $("sumLook").textContent = `${(THEMES[S.theme]||THEMES.sunrise).name} theme · sunrise ${S.sunMax}%`;
+    $("sumMorning").textContent = `Weather for ${S.place}` + (S.todoToken ? " · Todoist on" : "");
   }
 
   // ---------- Location ----------
@@ -764,7 +849,7 @@
       try {
         await SP.tokenCall({ grant_type:"authorization_code", code:q.get("code"), redirect_uri:SP.redirect(), code_verifier:SPT.verifier });
         delete SPT.verifier; saveSPT();
-        S.src = "spotify"; save(); paint(); toast("Spotify connected");
+        S.src = "spotify"; save(); goPage("sound", true); toast("Spotify connected");
         SP.listDevices();
       } catch(e){ toast("Spotify login failed. Check the Client ID and redirect URI."); }
     },
@@ -981,11 +1066,12 @@
   }
 
   function startSound(){
-    ringStart = Date.now();
+    ringStart = Date.now(); userVol = false; captureKeys(true);
     if (S.src==="radio") startRadio(); else if (S.src==="songs") startSongs(); else if (S.src==="spotify") startSpotify(); else startChimes();
     rampVolume();
   }
   function stopSound(){
+    userVol = false; captureKeys(false);
     clearInterval(chimeTimer); chimeTimer = null;
     if (master && ac) master.gain.setTargetAtTime(0, ac.currentTime, 0.2);
     if (spDev){ SP.api("PUT", `/me/player/pause?device_id=${spDev}`).catch(()=>{}); spDev = null; }
@@ -994,12 +1080,25 @@
   }
   let earlyPlay = false;
   function rampVolume(){
-    if (!using) return;
+    if (!using || userVol) return;
     let frac = Math.min(1, 0.06 + (Date.now()-ringStart)/(S.fade*60000));
     if (earlyPlay && mode === "night") frac = Math.min(frac, 0.35);
     applyVol(frac * S.vol/100);
   }
-  let curVol = 0;
+  let curVol = 0, userVol = false;
+  // Phone volume buttons (Android app): take over from the automatic fade
+  window.nativeVolumeKey = dir => {
+    if (!using) return false;
+    userVol = true;
+    applyVol(Math.max(0.02, Math.min(1, curVol + (dir === "up" ? 0.06 : -0.06))));
+    showVolHud(); return true;
+  };
+  let hudT = null;
+  function showVolHud(){
+    $("volbar").style.width = Math.round(curVol*100) + "%"; $("volpct").textContent = Math.round(curVol*100) + "%";
+    $("volhud").classList.add("show"); clearTimeout(hudT); hudT = setTimeout(()=>$("volhud").classList.remove("show"), 1500);
+  }
+  const captureKeys = on => { try { if (NATIVE && NATIVE.captureVolumeKeys) NATIVE.captureVolumeKeys(on); } catch(e){} };
   function applyVol(v){
     curVol = v;
     if (using==="chimes"){ if (master && ac) master.gain.setTargetAtTime(v, ac.currentTime, 0.5); }
@@ -1111,13 +1210,14 @@
     $("rClock").textContent = fmt(new Date());
     if (earlyPlay && using && using !== "spotify-failed"){
       // Already playing: carry on from the current volume and keep fading up
-      ringStart = Date.now() - 0.29*S.fade*60000; earlyPlay = false;
+      // keep rising from wherever the volume is now (including if you changed it with the buttons)
+      ringStart = Date.now() - Math.max(0, curVol/(S.vol/100) - 0.06)*S.fade*60000; earlyPlay = false; userVol = false;
     } else { earlyPlay = false; startSound(); }
   }
   $("snoozeBtn").onclick = () => { stopSound(); snoozeUntil = new Date(Date.now() + (preview ? 15000 : S.snooze*60000)); mode = "snooze"; $("rNow").textContent=""; };
   $("upBtn").onclick = () => enterMorning(true);
-  $("mmDown").onclick = () => applyVol(Math.max(0.03, curVol - 0.08));
-  $("mmUp").onclick = () => applyVol(Math.min(1, curVol + 0.08));
+  $("mmDown").onclick = () => { userVol = true; applyVol(Math.max(0.03, curVol - 0.08)); showVolHud(); };
+  $("mmUp").onclick = () => { userVol = true; applyVol(Math.min(1, curVol + 0.08)); showVolHud(); };
   $("mmStop").onclick = () => { stopSound(); paintMorningMusic(); };
 
   // ---------- Morning ----------
@@ -1249,6 +1349,7 @@
       mode = "night"; show("night"); tick();
     } else if (armed) disarm();
   } catch(e){}
+  if (PAGES.includes(location.hash.slice(1))) history.replaceState(null, "", location.pathname);
   if (location.hash === "#wake"){ history.replaceState(null, "", location.pathname); setTimeout(()=>window.nativeWake(), 300); }
 })();
 </script>
