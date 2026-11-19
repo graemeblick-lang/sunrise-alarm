@@ -307,12 +307,16 @@
 <script>
 (() => {
   // ---------- Settings ----------
+  // Each station lists links to try in order: the ABC's current HLS streams first, older MP3 links as backup
+  const AK = "https://mediaserviceslive.akamaized.net/hls/live/", MH = "https://live-radio01.mediahubaustralia.com/";
   const STATIONS = [
-    ["ABC Melbourne",  "https://live-radio01.mediahubaustralia.com/3LRW/mp3/"],
-    ["triple j",       "https://live-radio01.mediahubaustralia.com/2TJW/mp3/"],
-    ["Double J",       "https://live-radio01.mediahubaustralia.com/DJDW/mp3/"],
-    ["ABC Classic",    "https://live-radio01.mediahubaustralia.com/2FMW/mp3/"],
-    ["Custom stream…", ""]
+    ["ABC Melbourne",  [AK+"2038300/localmelbourne/index.m3u8", AK+"2038300/localmelbourne/masterhq.m3u8", MH+"3LRW/mp3/"]],
+    ["triple j",       [AK+"2038308/triplejnsw/index.m3u8", AK+"2038308/triplejnsw/masterhq.m3u8", MH+"2TJW/mp3/"]],
+    ["Double J",       [AK+"2038315/doublejnsw/index.m3u8", AK+"2038315/doublejnsw/masterhq.m3u8", MH+"DJDW/mp3/"]],
+    ["ABC Classic",    [AK+"2038316/classicfmnsw/index.m3u8", AK+"2038316/classicfmnsw/masterhq.m3u8", MH+"2FMW/mp3/"]],
+    ["triple j Hottest", [AK+"2100183/triplejhottest/index.m3u8"]],
+    ["Radio National", [AK+"2038327/rnvic/index.m3u8", MH+"3RNW/mp3/"]],
+    ["Custom stream…", []]
   ];
   const DEF = { time:"06:30", days:[1,2,3,4,5], dur:30, src:"chimes", station:0, customUrl:"", vol:70, fade:3, snooze:9, dim:2,
                 lat:-37.814, lon:144.963, place:"Melbourne", willy:"", todoToken:"",
@@ -477,7 +481,8 @@
     $("spClient").value = S.spClient; $("spLink").value = S.spLink;
     $("spShuffle").classList.toggle("on", S.spShuffle);
     $("station").value = S.station;
-    $("customUrl").style.display = STATIONS[S.station][1] ? "none" : "";
+    if (!STATIONS[S.station]) S.station = 0;
+    $("customUrl").style.display = STATIONS[S.station][1].length ? "none" : "";
     $("customUrl").value = S.customUrl;
     $("todoToken").value = S.todoToken;
     $("vol").value = S.vol; $("dim").value = S.dim;
@@ -689,19 +694,58 @@
   function playPhrase(){ if (!ac) return; const t0 = ac.currentTime + 0.05; NOTES.forEach((f,i)=>bell(f, t0 + i*0.42, 0.5)); }
   function startChimes(){ initAudio(); if (!ac) return; using = "chimes"; clearInterval(chimeTimer); playPhrase(); chimeTimer = setInterval(playPhrase, 5200); $("rNow").textContent = ""; }
 
-  function streamUrl(){ return STATIONS[S.station][1] || S.customUrl; }
+  function streamUrls(){ const l = STATIONS[S.station][1]; return l.length ? l : (S.customUrl ? [S.customUrl] : []); }
+  let hls = null, hlsLib = null;
+  function loadHlsLib(){
+    if (!hlsLib) hlsLib = new Promise((res, rej)=>{ const sc = document.createElement("script"); sc.src = "https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"; sc.onload = ()=>res(window.Hls); sc.onerror = rej; document.head.appendChild(sc); });
+    return hlsLib;
+  }
+  // Try one link; resolves when sound is actually playing, rejects on error or after 10 s
+  function tryStream(u){
+    return new Promise(async (resolve, reject) => {
+      let done = false;
+      const ok = () => { if (!done){ done = true; clearTimeout(t); resolve(); } };
+      const bad = why => { if (!done){ done = true; clearTimeout(t); reject(why); } };
+      const t = setTimeout(()=>bad("timeout"), 10000);
+      player.onplaying = ok; player.onerror = () => bad("error");
+      const isHls = /\.m3u8(\?|$)/i.test(u);
+      try {
+        if (isHls && !player.canPlayType("application/vnd.apple.mpegurl")){
+          const Hls = await loadHlsLib();
+          if (!Hls || !Hls.isSupported()) return bad("no-hls");
+          hls = new Hls(); hls.loadSource(u); hls.attachMedia(player);
+          hls.on(Hls.Events.ERROR, (e, d) => { if (d && d.fatal) bad("hls"); });
+        } else {
+          player.src = u;
+        }
+        await player.play();
+      } catch(e){ bad(e && e.name === "NotAllowedError" ? "blocked" : "play"); }
+    });
+  }
+  function resetPlayer(){ if (hls){ try { hls.destroy(); } catch(e){} hls = null; } player.onplaying = player.onerror = null; try { player.pause(); } catch(e){} player.removeAttribute("src"); player.load(); }
   function fallBack(why){ if (using==="chimes") return; stopPlayer(); startChimes(); $("rNow").textContent = why; }
-  function stopPlayer(){ clearTimeout(fallbackTimer); player.onended = player.onerror = player.onplaying = null; try { player.pause(); } catch(e){} player.removeAttribute("src"); player.load(); if (songUrl){ URL.revokeObjectURL(songUrl); songUrl=null; } }
+  function stopPlayer(){ clearTimeout(fallbackTimer); player.onended = null; resetPlayer(); if (songUrl){ URL.revokeObjectURL(songUrl); songUrl=null; } }
   function armFallback(why){ clearTimeout(fallbackTimer); fallbackTimer = setTimeout(()=>{ if (player.paused || player.readyState<3) fallBack(why); }, 12000); }
 
   async function startRadio(){
-    const u = streamUrl();
-    if (!u) return fallBack("No stream link set, so playing chimes");
-    using = "radio"; player.volume = 0.05; player.src = u;
-    player.onerror = () => fallBack("Radio wouldn't play, so playing chimes");
-    player.onplaying = () => { clearTimeout(fallbackTimer); $("rNow").textContent = "📻 " + STATIONS[S.station][0].replace("…",""); };
-    armFallback("Radio didn't start, so playing chimes");
-    try { await player.play(); } catch(e){ fallBack("Radio was blocked, so playing chimes"); }
+    const urls = streamUrls();
+    if (!urls.length) return fallBack("No stream link set, so playing chimes");
+    using = "radio"; player.volume = 0.05;
+    const name = STATIONS[S.station][0].replace("…","");
+    let lastWhy = "";
+    for (let i = 0; i < urls.length; i++){
+      if (using !== "radio") return;            // stopped or snoozed meanwhile
+      $("rNow").textContent = `📻 Tuning in to ${name}…` + (i ? ` (link ${i+1})` : "");
+      try {
+        await tryStream(urls[i]);
+        if (using !== "radio"){ resetPlayer(); return; }
+        $("rNow").textContent = "📻 " + name;
+        // if the stream drops later, fall back so you're never left in silence
+        player.onerror = () => fallBack(`${name} dropped out, so playing chimes`);
+        return;
+      } catch(why){ lastWhy = why; resetPlayer(); }
+    }
+    if (using === "radio") fallBack(lastWhy === "blocked" ? "Radio was blocked by the browser, so playing chimes" : `${name} wouldn't play, so playing chimes`);
   }
   async function playNextSong(){
     if (!songQueue.length){ const all = await songsAll(); if (!all.length) return fallBack("No songs added, so playing chimes"); songQueue = all.sort(()=>Math.random()-.5); }
