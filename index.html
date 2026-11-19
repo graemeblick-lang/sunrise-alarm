@@ -104,6 +104,10 @@
   #mDone{background:var(--mBtn);color:var(--rBtnText);margin-top:4px}
 
   .rleft{text-align:center}
+  .mm{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:17px}
+  .mmBtns{display:flex;gap:8px;flex:none}
+  .mmBtns button{height:40px;min-width:44px;padding:0 14px;border-radius:20px;background:rgba(255,255,255,.7);color:var(--mBtn);font-size:16px}
+  #mmStop{background:var(--mBtn);color:var(--rBtnText)}
   .themes{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
   .theme{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;background:#1c1614;border:2px solid transparent;font-size:15px;color:#e2d4c8;text-align:left}
   .theme.sel{border-color:var(--amber)}
@@ -215,6 +219,12 @@
   <div class="card" id="autoCard" style="display:none">
     <div class="row"><span>Wake me automatically</span><div class="toggle" id="autoTgl"></div></div>
     <div class="hint" style="margin-top:2px">The app opens itself and starts the sunrise, even if you were watching YouTube or the screen was off. No need to tap Goodnight.</div>
+  </div>
+
+  <div class="card">
+    <label class="t">Pause alarms</label>
+    <div class="row"><span>Until (inclusive)</span><input type="date" id="pauseUntil" style="width:auto;flex:1;max-width:190px;margin:0"></div>
+    <div class="chips btnrow" style="margin-top:8px"><button class="small" id="pause1">Tomorrow</button><button class="small" id="pause7">1 week</button><button class="small" id="pauseClear">Clear</button></div>
   </div>
 
   <div class="card">
@@ -348,6 +358,12 @@
   <div id="mGreet">Good morning</div>
   <div id="mClock">--:--</div>
   <div id="mDate"></div>
+  <div class="mcard" id="mMusic" style="display:none">
+    <h3>Now playing</h3>
+    <div class="mm"><span id="mmName"></span>
+      <div class="mmBtns"><button id="mmDown" aria-label="Quieter">−</button><button id="mmUp" aria-label="Louder">+</button><button id="mmStop">■ Stop</button></div>
+    </div>
+  </div>
   </div>
   <div class="mR">
 
@@ -395,7 +411,7 @@
   ];
   const DEF = { time:"06:30", days:[1,2,3,4,5], dur:30, src:"chimes", station:0, customUrl:"", vol:70, fade:3, snooze:9, dim:2,
                 lat:-37.814, lon:144.963, place:"Melbourne", willy:"", todoToken:"",
-                spClient:"", spLink:"", spShuffle:true, spDevice:null, spSimple:false, sunMax:60, perDay:false, dayTimes:{}, theme:"sunrise", auto:true, skip:0 };
+                spClient:"", spLink:"", spShuffle:true, spDevice:null, spSimple:false, sunMax:60, pauseUntil:"", perDay:false, dayTimes:{}, theme:"sunrise", auto:true, skip:0 };
   const NATIVE = (window.Android && typeof window.Android.schedule === "function") ? window.Android : null;
   // Spotify tokens are kept separately from settings
   let SPT = {};
@@ -517,6 +533,11 @@
   STATIONS.forEach(([n],i)=>{ const o=document.createElement("option"); o.value=i; o.textContent=n; $("station").appendChild(o); });
 
   $("autoTgl").onclick = () => { S.auto = !S.auto; save(); paint(); toast(S.auto ? "The app will open itself at sunrise" : "Tap Goodnight each night instead"); };
+  const dayPlus = n => { const d = new Date(); d.setDate(d.getDate()+n); return d.toLocaleDateString("en-CA"); };
+  $("pauseUntil").onchange = e => { S.pauseUntil = e.target.value; save(); paint(); };
+  $("pause1").onclick = () => { S.pauseUntil = dayPlus(1); save(); paint(); toast("Alarms paused until tomorrow is over"); };
+  $("pause7").onclick = () => { S.pauseUntil = dayPlus(7); save(); paint(); toast("Alarms paused for a week"); };
+  $("pauseClear").onclick = () => { S.pauseUntil = ""; save(); paint(); };
   $("perDayTgl").onclick = () => {
     if (!S.days.length) return toast("Pick some repeat days first");
     S.perDay = !S.perDay;
@@ -534,15 +555,21 @@
 
   const timeFor = day => (S.perDay && S.days.length && S.dayTimes[day]) ? S.dayTimes[day] : S.time;
   function nextAlarm(from = new Date()){
-    for (let d=0; d<=7; d++){
+    for (let d=0; d<=400; d++){
       const t = new Date(from); t.setDate(t.getDate()+d);
       const [h,m] = timeFor(t.getDay()).split(":").map(Number);
       t.setHours(h,m,0,0);
       if (t <= from) continue;
       if (S.skip && t.getTime()===S.skip) continue;
+      if (S.pauseUntil && t.toLocaleDateString("en-CA") <= S.pauseUntil) continue;
       if (!S.days.length || S.days.includes(t.getDay())) return t;
     }
     return null;
+  }
+  function nextText(){
+    const paused = S.pauseUntil && S.pauseUntil >= new Date().toLocaleDateString("en-CA");
+    const pd = paused ? new Date(S.pauseUntil + "T12:00").toLocaleDateString("en-AU",{weekday:"short", day:"numeric", month:"short"}) : "";
+    return (paused ? `Paused until ${pd} · ` : "") + (S.days.length ? "" : "One-off · ") + describeAlarm(nextAlarm());
   }
   function describeAlarm(t){
     if (!t) return "";
@@ -570,7 +597,7 @@
         const row = document.createElement("div"); row.className = "dt";
         const lab = document.createElement("span"); lab.textContent = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][d];
         const inp = document.createElement("input"); inp.type = "time"; inp.value = S.dayTimes[d] || S.time;
-        inp.onchange = () => { S.dayTimes[d] = inp.value || S.time; save(); $("nextTxt").textContent = describeAlarm(nextAlarm()); };
+        inp.onchange = () => { S.dayTimes[d] = inp.value || S.time; save(); $("nextTxt").textContent = nextText(); };
         row.append(lab, inp); box.appendChild(row);
       });
     }
@@ -600,7 +627,9 @@
     $("vol").value = S.vol; $("dim").value = S.dim; $("sunMax").value = S.sunMax;
     document.querySelectorAll('#setup input[type=range]').forEach(paintRange);
     $("locName").textContent = S.place;
-    $("nextTxt").textContent = (S.days.length ? "" : "One-off · ") + describeAlarm(nextAlarm());
+    $("nextTxt").textContent = nextText();
+    if (S.pauseUntil && S.pauseUntil < new Date().toLocaleDateString("en-CA")){ S.pauseUntil = ""; save(); }
+    $("pauseUntil").value = S.pauseUntil;
     $("willyLink").href = /^https:\/\/(www\.)?willyweather\.com\.au\//.test(S.willy) ? S.willy : "https://www.willyweather.com.au/";
     $("willy").value = S.willy;
   }
@@ -851,7 +880,7 @@
     });
   }
   function resetPlayer(){ if (NATIVE_RADIO && nativeRadioOn !== null){ try { NATIVE.radioStop(); } catch(e){} nativeRadioOn = false; nativeWaiter = null; } if (hls){ try { hls.destroy(); } catch(e){} hls = null; } player.onplaying = player.onerror = null; try { player.pause(); } catch(e){} player.removeAttribute("src"); player.load(); }
-  function fallBack(why){ if (using==="chimes") return; stopPlayer(); startChimes(); $("rNow").textContent = why; }
+  function fallBack(why){ if (mode==="morning"){ stopSound(); paintMorningMusic(); return; } if (using==="chimes") return; stopPlayer(); startChimes(); $("rNow").textContent = why; }
   function stopPlayer(){ clearTimeout(fallbackTimer); player.onended = null; resetPlayer(); if (songUrl){ URL.revokeObjectURL(songUrl); songUrl=null; } }
   function armFallback(why){ clearTimeout(fallbackTimer); fallbackTimer = setTimeout(()=>{ if (player.paused || player.readyState<3) fallBack(why); }, 12000); }
 
@@ -906,6 +935,7 @@
   }
   function spotifyFail(why){
     if (using !== "spotify") return;
+    if (mode==="morning"){ stopSound(); paintMorningMusic(); return; }
     if (spNativeFade){ try { NATIVE.spotifyPause(); NATIVE.musicRestore(); } catch(e){} spNativeFade = false; }
     using = "spotify-failed"; startChimes(); $("rNow").textContent = why + ", so playing chimes";
   }
@@ -967,7 +997,11 @@
     if (!using) return;
     let frac = Math.min(1, 0.06 + (Date.now()-ringStart)/(S.fade*60000));
     if (earlyPlay && mode === "night") frac = Math.min(frac, 0.35);
-    const v = frac * S.vol/100;
+    applyVol(frac * S.vol/100);
+  }
+  let curVol = 0;
+  function applyVol(v){
+    curVol = v;
     if (using==="chimes"){ if (master && ac) master.gain.setTargetAtTime(v, ac.currentTime, 0.5); }
     else if (using==="spotify" && spNativeFade){ try { NATIVE.musicVolume(Math.max(0.07, v)); } catch(e){} }
     else if (using==="spotify"){
@@ -1055,7 +1089,7 @@
     } else if (mode==="ring"){
       $("rClock").textContent = fmt(now);
       rampVolume();
-      if (Date.now()-ringStart > 30*60000) enterMorning(); // give up after 30 min
+      if (Date.now()-ringStart > 30*60000) enterMorning(false); // give up after 30 min
     } else if (mode==="snooze"){
       $("rClock").textContent = fmt(now);
       const left = Math.max(0, Math.ceil((snoozeUntil-now)/1000));
@@ -1063,7 +1097,10 @@
       if (now >= snoozeUntil) enterRing();
     } else if (mode==="morning"){
       $("mClock").textContent = fmt(now);
-    } else if (mode==="setup" && now.getSeconds()===0){ $("nextTxt").textContent = (S.days.length ? "" : "One-off · ") + describeAlarm(nextAlarm()); }
+      if (!musicOn() && Date.now() - morningSince > 30*60000){
+        if (nextAlarm()) enterNight(false); else { mode="setup"; show("setup"); paint(); }
+      }
+    } else if (mode==="setup" && now.getSeconds()===0){ $("nextTxt").textContent = nextText(); }
   }
   setInterval(tick, 1000);
 
@@ -1078,7 +1115,10 @@
     } else { earlyPlay = false; startSound(); }
   }
   $("snoozeBtn").onclick = () => { stopSound(); snoozeUntil = new Date(Date.now() + (preview ? 15000 : S.snooze*60000)); mode = "snooze"; $("rNow").textContent=""; };
-  $("upBtn").onclick = () => { stopSound(); enterMorning(); };
+  $("upBtn").onclick = () => enterMorning(true);
+  $("mmDown").onclick = () => applyVol(Math.max(0.03, curVol - 0.08));
+  $("mmUp").onclick = () => applyVol(Math.min(1, curVol + 0.08));
+  $("mmStop").onclick = () => { stopSound(); paintMorningMusic(); };
 
   // ---------- Morning ----------
   function sunTimes(date){
@@ -1091,9 +1131,19 @@
     return { rise:new Date(base + (720-4*(S.lon+ha)-eq)*60000), set:new Date(base + (720-4*(S.lon-ha)-eq)*60000) };
   }
   function disarm(){ try { localStorage.removeItem("sunrise-armed"); } catch(e){} }
-  function enterMorning(){
-    stopSound(); disarm(); scheduleNative();
-    mode = "morning"; show("morning");
+  let morningSince = 0;
+  const musicOn = () => ["radio","songs","spotify"].includes(using);
+  function paintMorningMusic(){
+    const on = musicOn();
+    $("mMusic").style.display = on ? "" : "none";
+    if (on) $("mmName").textContent = $("rNow").textContent || (using==="radio" ? "📻 Radio" : using==="spotify" ? "🎵 Spotify" : "♪ Your songs");
+  }
+  function enterMorning(keepMusic){
+    if (!(keepMusic && musicOn())) stopSound();
+    earlyPlay = false;
+    disarm(); scheduleNative();
+    mode = "morning"; show("morning"); morningSince = Date.now();
+    paintMorningMusic();
     const now = new Date(), h = now.getHours();
     $("mGreet").textContent = h<12 ? "Good morning" : h<17 ? "Good afternoon" : "Good evening";
     $("mClock").textContent = fmt(now);
@@ -1105,7 +1155,7 @@
     $("todoCard").style.display = S.todoToken ? "" : "none";
     if (S.todoToken) loadTasks();
   }
-  $("mDone").onclick = () => { mode="setup"; show("setup"); paint(); paintTomorrow(); try{ document.fullscreenElement && document.exitFullscreen(); }catch(e){} };
+  $("mDone").onclick = () => { stopSound(); mode="setup"; show("setup"); paint(); paintTomorrow(); try{ document.fullscreenElement && document.exitFullscreen(); }catch(e){} };
 
   // ---------- Todoist (your own API token) ----------
   async function loadTasks(){
@@ -1173,9 +1223,9 @@
     paintNightControls();
   };
   $("nUp").onclick = e => {
-    e.stopPropagation(); nightLight(0); earlyPlay = false;
+    e.stopPropagation(); nightLight(0);
     if (!preview && alarmAt){ S.skip = +alarmAt; save(); }   // don't let this alarm go off later
-    enterMorning();
+    enterMorning(true);
   };
   $("nSettings").onclick = () => { nightLight(0); disarm(); if (using) stopSound(); earlyPlay = false; mode="setup"; show("setup"); paint(); };
   $("nCancel").onclick = () => {
