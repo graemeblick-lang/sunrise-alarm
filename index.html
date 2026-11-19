@@ -227,6 +227,14 @@
   @media (orientation:landscape) and (max-height:600px){
     #setup .page.on{max-width:760px;margin:0 auto}
   }
+  .st{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--md-outline-var)}
+  .st:first-child{border-top:0}
+  .st img,.st .ph{width:40px;height:40px;border-radius:10px;object-fit:cover;background:var(--md-secondary-container);flex:none;display:grid;place-items:center;font-size:18px}
+  .st .tx{flex:1;min-width:0}
+  .st .tx b{display:block;font:400 16px/22px "Roboto Flex",sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .st .tx small{display:block;font-size:13px;color:var(--md-on-surface-var);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .st button{height:36px;min-width:40px;padding:0 12px;border-radius:18px;background:var(--md-secondary-container);color:var(--md-on-secondary-container);font:500 14px "Roboto Flex",sans-serif;flex:none}
+  .st button.on{background:var(--md-primary);color:var(--md-on-primary)}
   .volhud{position:fixed;left:50%;top:24px;transform:translateX(-50%);z-index:20;background:rgba(20,16,14,.88);color:#f3e2d2;border-radius:24px;padding:10px 18px;font:500 15px "Roboto Flex",sans-serif;display:flex;align-items:center;gap:10px;opacity:0;transition:opacity .2s;pointer-events:none}
   .volhud.show{opacity:1}
   .volhud .bar{width:120px;height:6px;border-radius:3px;background:rgba(255,255,255,.2);overflow:hidden}
@@ -297,6 +305,7 @@
       <div class="sub-panel" id="radioPanel">
         <select id="station"></select>
         <input type="url" id="customUrl" placeholder="Paste a stream link (https://…)">
+      <div class="chips btnrow" style="margin-top:10px"><button class="small" id="findStations">🔎 Find more stations</button></div>
         <div class="hint">Needs internet. If the stream won't play, it falls back to the chimes.</div>
       </div>
 
@@ -339,6 +348,23 @@
       </div>
       <div class="row"><span>Fade in over</span><div class="chips" id="fadeChips"></div></div>
     </div>
+  </div>
+
+  <div class="page" data-page="stations" data-title="Find stations">
+    <div class="card">
+      <input type="text" id="stQuery" placeholder="Station name, e.g. Gold, Smooth, 3AW" autocomplete="off" style="margin-top:0">
+      <div class="chips btnrow" id="stQuick" style="margin-top:10px"></div>
+      <div class="row" style="margin-top:6px"><span>Australia only</span><div class="toggle on" id="stAU"></div></div>
+    </div>
+    <div class="card" id="stResultsCard">
+      <label class="t" id="stResultsTitle">Popular in Victoria</label>
+      <div id="stResults"></div>
+    </div>
+    <div class="card">
+      <label class="t">Your stations</label>
+      <div id="stMine"></div>
+    </div>
+    <div class="hint" style="padding:0 8px 16px">Station list from Radio Browser, a free community directory. Some stations come and go; tap ▶ to check one before adding it.</div>
   </div>
 
   <div class="page" data-page="look" data-title="Look &amp; brightness">
@@ -455,11 +481,16 @@
     ["Double J",       [AK+"2038315/doublejnsw/index.m3u8", AK+"2038315/doublejnsw/masterhq.m3u8", MH+"DJDW/mp3/"]],
     ["ABC Classic",    [AK+"2038316/classicfmnsw/index.m3u8", AK+"2038316/classicfmnsw/masterhq.m3u8", MH+"2FMW/mp3/"]],
     ["triple j Hottest", [AK+"2100183/triplejhottest/index.m3u8"]],
-    ["Radio National", [AK+"2038327/rnvic/index.m3u8", MH+"3RNW/mp3/"]],
-    ["Custom stream…", []]
+    ["Radio National", [AK+"2038327/rnvic/index.m3u8", MH+"3RNW/mp3/"]]
   ];
+  // Full list = ABC presets, then stations you've added from search, then a custom link
+  function stationList(){
+    const mine = (S.myStations||[]).map(m => [m.name, [m.url], m]);
+    return [...STATIONS, ...mine, ["Custom stream…", []]];
+  }
+  const curStation = () => { const l = stationList(); return l[S.station] || l[0]; };
   const DEF = { time:"06:30", days:[1,2,3,4,5], dur:30, src:"chimes", station:0, customUrl:"", vol:70, fade:3, snooze:9, dim:2,
-                lat:-37.814, lon:144.963, place:"Melbourne", willy:"", todoToken:"",
+                lat:-37.814, lon:144.963, place:"Melbourne", willy:"", todoToken:"", myStations:[],
                 spClient:"", spLink:"", spShuffle:true, spDevice:null, spSimple:false, sunMax:60, pauseUntil:"", perDay:false, dayTimes:{}, theme:"sunrise", auto:true, skip:0 };
   const NATIVE = (window.Android && typeof window.Android.schedule === "function") ? window.Android : null;
   // Spotify tokens are kept separately from settings
@@ -579,7 +610,15 @@
   chipGroup($("snzChips"), [5,9,15], "snooze", v=>`${v}m`);
   chipGroup($("fadeChips"), [1,3,5], "fade", v=>`${v}m`);
   chipGroup($("srcChips"), ["chimes","spotify","radio","songs"], "src", v=>({chimes:"Chimes",spotify:"Spotify",radio:"Radio",songs:"My songs"})[v]);
-  STATIONS.forEach(([n],i)=>{ const o=document.createElement("option"); o.value=i; o.textContent=n; $("station").appendChild(o); });
+  function renderStationSelect(){
+    const sel = $("station"); sel.innerHTML = "";
+    const l = stationList(), nPre = STATIONS.length, nMine = (S.myStations||[]).length;
+    const group = (label, from, to) => { const g = document.createElement("optgroup"); g.label = label;
+      for (let i = from; i < to; i++){ const o = document.createElement("option"); o.value = i; o.textContent = l[i][0]; g.appendChild(o); } sel.appendChild(g); };
+    group("ABC", 0, nPre);
+    if (nMine) group("Your stations", nPre, nPre + nMine);
+    group("Other", nPre + nMine, l.length);
+  }
 
   $("autoTgl").onclick = () => { S.auto = !S.auto; save(); paint(); toast(S.auto ? "The app will open itself at sunrise" : "Tap Goodnight each night instead"); };
   const dayPlus = n => { const d = new Date(); d.setDate(d.getDate()+n); return d.toLocaleDateString("en-CA"); };
@@ -669,8 +708,10 @@
     $("spClient").value = S.spClient; $("spLink").value = S.spLink;
     $("spShuffle").classList.toggle("on", S.spShuffle);
     $("station").value = S.station;
-    if (!STATIONS[S.station]) S.station = 0;
-    $("customUrl").style.display = STATIONS[S.station][1].length ? "none" : "";
+    if (!stationList()[S.station]) S.station = 0;
+    renderStationSelect(); $("station").value = S.station;
+    $("customUrl").style.display = curStation()[1].length ? "none" : "";
+    paintMyStations();
     $("customUrl").value = S.customUrl;
     $("todoToken").value = S.todoToken;
     $("vol").value = S.vol; $("dim").value = S.dim; $("sunMax").value = S.sunMax;
@@ -688,6 +729,7 @@
   const PAGES = [...document.querySelectorAll("#setup .page")].map(p=>p.dataset.page);
   function goPage(name, push){
     if (!PAGES.includes(name)) name = "main";
+    if (name !== "stations" && typeof stopPreview === "function") stopPreview();
     document.querySelectorAll("#setup .page").forEach(p=>p.classList.toggle("on", p.dataset.page===name));
     $("setup").classList.toggle("sub", name !== "main");
     const pg = document.querySelector(`#setup .page[data-page="${name}"]`);
@@ -711,13 +753,112 @@
   function paintSummaries(){
     const paused = S.pauseUntil && S.pauseUntil >= new Date().toLocaleDateString("en-CA");
     $("sumAlarm").textContent = (paused ? "Paused · " : "") + daysText() + (S.perDay ? " (own times)" : "") + ` · sunrise ${S.dur} min · snooze ${S.snooze} min`;
-    const st = STATIONS[S.station] ? STATIONS[S.station][0].replace("…","") : "Radio";
+    const st = curStation()[0].replace("…","");
     const src = S.src==="radio" ? "📻 " + st : S.src==="songs" ? "♪ Your songs" :
                 S.src==="spotify" ? ("Spotify" + ((S.spSimple || !SPT.refresh) ? " (simple)" : " · connected")) : "Chimes";
     $("sumSound").textContent = `${src} · fade ${S.fade} min · max ${S.vol}%`;
     $("sumLook").textContent = `${(THEMES[S.theme]||THEMES.sunrise).name} theme · sunrise ${S.sunMax}%`;
     $("sumMorning").textContent = `Weather for ${S.place}` + (S.todoToken ? " · Todoist on" : "");
   }
+
+  // ---------- Station search (Radio Browser) ----------
+  const RB = ["https://de1.api.radio-browser.info","https://nl1.api.radio-browser.info","https://at1.api.radio-browser.info","https://all.api.radio-browser.info"];
+  async function rbSearch(params){
+    const q = new URLSearchParams({ hidebroken:"true", order:"clickcount", reverse:"true", limit:"40", ...params });
+    for (const host of RB){
+      try {
+        const ctl = new AbortController(); const t = setTimeout(()=>ctl.abort(), 7000);
+        const r = await fetch(`${host}/json/stations/search?${q}`, { signal: ctl.signal }); clearTimeout(t);
+        if (r.ok) return await r.json();
+      } catch(e){}
+    }
+    throw new Error("unreachable");
+  }
+  // In the web version an https page can't play http streams; the Android app can
+  const playable = u => !!u && (u.startsWith("https://") || (NATIVE && u.startsWith("http://")));
+  const QUICK = [
+    ["Victoria", {state:"Victoria"}, "Popular in Victoria"], ["Australia top", {}, "Popular in Australia"],
+    ["News & talk", {tag:"news"}, "News & talk"], ["Classic hits", {tag:"classic hits"}, "Classic hits"],
+    ["Country", {tag:"country"}, "Country"], ["Jazz", {tag:"jazz"}, "Jazz"], ["Chill", {tag:"chillout"}, "Chill"]
+  ];
+  let previewing = null;
+  function stopPreview(){ if (previewing){ stopSound(); previewing = null; document.querySelectorAll(".st .pv.on").forEach(b=>{ b.classList.remove("on"); b.textContent = "▶"; }); } }
+  async function previewStation(url, btn){
+    if (previewing === url){ stopPreview(); return; }
+    stopPreview();
+    initAudio(); previewing = url; btn.classList.add("on"); btn.textContent = "…";
+    using = "radio"; captureKeys(true);
+    try {
+      await tryStream(url);
+      if (previewing !== url) return;
+      applyVol(Math.max(0.15, S.vol/100*0.6)); btn.textContent = "■";
+    } catch(e){
+      if (previewing !== url) return;
+      resetPlayer(); using = null; previewing = null; btn.classList.remove("on"); btn.textContent = "▶"; toast("That station isn't playing right now");
+    }
+  }
+  function stationRow(name, info, favicon, actions){
+    const row = document.createElement("div"); row.className = "st";
+    const ic = favicon ? Object.assign(document.createElement("img"), { src: favicon, alt:"", referrerPolicy:"no-referrer" }) : Object.assign(document.createElement("div"), { className:"ph", textContent:"📻" });
+    if (favicon) ic.onerror = () => ic.replaceWith(Object.assign(document.createElement("div"), { className:"ph", textContent:"📻" }));
+    const tx = document.createElement("div"); tx.className = "tx";
+    const b = document.createElement("b"); b.textContent = name; const sm = document.createElement("small"); sm.textContent = info;
+    tx.append(b, sm); row.append(ic, tx, ...actions); return row;
+  }
+  async function runSearch(params, title){
+    const box = $("stResults"); $("stResultsTitle").textContent = title;
+    box.innerHTML = '<div class="hint" style="margin:0">Searching…</div>';
+    if ($("stAU").classList.contains("on")) params = { countrycode:"AU", ...params };
+    let list;
+    try { list = await rbSearch(params); } catch(e){ box.innerHTML = '<div class="hint" style="margin:0">Couldn\'t reach the station directory. Check the internet and try again.</div>'; return; }
+    const seen = new Set();
+    list = list.filter(x => { const u = x.url_resolved || x.url; const k = (x.name||"").trim().toLowerCase();
+      if (!playable(u) || seen.has(k)) return false; seen.add(k); return true; }).slice(0, 25);
+    box.innerHTML = "";
+    if (!list.length){ box.innerHTML = '<div class="hint" style="margin:0">No stations found. Try another name, or turn off Australia only.</div>'; return; }
+    list.forEach(x => {
+      const url = x.url_resolved || x.url, name = (x.name||"Station").trim();
+      const info = [x.state || x.country, x.codec && x.bitrate ? `${x.codec} ${x.bitrate}k` : x.codec, (x.tags||"").split(",").slice(0,2).join(", ")].filter(Boolean).join(" · ");
+      const pv = Object.assign(document.createElement("button"), { className:"pv", textContent:"▶" }); pv.onclick = () => previewStation(url, pv);
+      const added = (S.myStations||[]).some(m => m.url === url);
+      const add = Object.assign(document.createElement("button"), { textContent: added ? "✓" : "＋ Add" });
+      add.onclick = () => {
+        if ((S.myStations||[]).some(m => m.url === url)) return;
+        S.myStations = [...(S.myStations||[]), { name, url, favicon: x.favicon || "", uuid: x.stationuuid || "" }];
+        S.station = STATIONS.length + S.myStations.length - 1; S.src = "radio"; save();
+        add.textContent = "✓"; paint(); toast(`${name} added and selected`);
+      };
+      box.appendChild(stationRow(name, info, x.favicon, [pv, add]));
+    });
+  }
+  function paintMyStations(){
+    const box = $("stMine"); if (!box) return; box.innerHTML = "";
+    const mine = S.myStations || [];
+    if (!mine.length){ box.innerHTML = '<div class="hint" style="margin:0">None yet. Stations you add appear here and in the station list.</div>'; return; }
+    mine.forEach((m, i) => {
+      const idx = STATIONS.length + i;
+      const pick = Object.assign(document.createElement("button"), { textContent: S.station === idx ? "✓ Using" : "Use", className: S.station === idx ? "on" : "" });
+      pick.onclick = () => { S.station = idx; S.src = "radio"; save(); paint(); };
+      const del = Object.assign(document.createElement("button"), { textContent:"✕", ariaLabel:"Remove" });
+      del.onclick = () => {
+        S.myStations = mine.filter((_, j) => j !== i);
+        if (S.station === idx) S.station = 0; else if (S.station > idx) S.station--;
+        save(); paint();
+      };
+      box.appendChild(stationRow(m.name, "Added from search", m.favicon, [pick, del]));
+    });
+  }
+  QUICK.forEach(([label, params, title]) => {
+    const b = Object.assign(document.createElement("button"), { className:"small", textContent: label });
+    b.onclick = () => { $("stQuery").value = ""; runSearch(params, title); };
+    $("stQuick").appendChild(b);
+  });
+  let stTimer = null;
+  $("stQuery").oninput = e => { clearTimeout(stTimer); const v = e.target.value.trim(); if (v.length < 2) return;
+    stTimer = setTimeout(()=>runSearch({ name: v }, `Results for “${v}”`), 450); };
+  $("stAU").onclick = () => { $("stAU").classList.toggle("on"); const v = $("stQuery").value.trim();
+    v.length >= 2 ? runSearch({ name: v }, `Results for “${v}”`) : runSearch({state:"Victoria"}, "Popular in Victoria"); };
+  $("findStations").onclick = () => { goPage("stations", true); if (!$("stResults").childElementCount) runSearch({state:"Victoria"}, "Popular in Victoria"); };
 
   // ---------- Location ----------
   $("useLoc").onclick = () => {
@@ -922,7 +1063,7 @@
   function playPhrase(){ if (!ac) return; const t0 = ac.currentTime + 0.05; NOTES.forEach((f,i)=>bell(f, t0 + i*0.42, 0.5)); }
   function startChimes(){ initAudio(); if (!ac) return; using = "chimes"; clearInterval(chimeTimer); playPhrase(); chimeTimer = setInterval(playPhrase, 5200); $("rNow").textContent = ""; }
 
-  function streamUrls(){ const l = STATIONS[S.station][1]; return l.length ? l : (S.customUrl ? [S.customUrl] : []); }
+  function streamUrls(){ const l = curStation()[1]; return l.length ? l : (S.customUrl ? [S.customUrl] : []); }
   let hls = null, hlsLib = null;
   function loadHlsLib(){
     if (!hlsLib) hlsLib = new Promise((res, rej)=>{ const sc = document.createElement("script"); sc.src = "https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"; sc.onload = ()=>res(window.Hls); sc.onerror = rej; document.head.appendChild(sc); });
@@ -933,7 +1074,7 @@
   let nativeWaiter = null, nativeRadioOn = false;
   window.nativeAudioEvent = ev => {
     if (nativeWaiter){ const w = nativeWaiter; nativeWaiter = null; ev === "playing" ? w.resolve() : w.reject(ev); return; }
-    if (nativeRadioOn && using === "radio" && (ev === "error" || ev === "ended")) fallBack(`${STATIONS[S.station][0]} dropped out, so playing chimes`);
+    if (nativeRadioOn && using === "radio" && (ev === "error" || ev === "ended")) fallBack(`${curStation()[0]} dropped out, so playing chimes`);
   };
   function tryNative(u){
     return new Promise((resolve, reject) => {
@@ -973,7 +1114,7 @@
     const urls = streamUrls();
     if (!urls.length) return fallBack("No stream link set, so playing chimes");
     using = "radio"; player.volume = 0.05;
-    const name = STATIONS[S.station][0].replace("…","");
+    const name = curStation()[0].replace("…","");
     let lastWhy = "";
     for (let i = 0; i < urls.length; i++){
       if (using !== "radio") return;            // stopped or snoozed meanwhile
