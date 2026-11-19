@@ -1176,13 +1176,22 @@
   window.nativeAudioEvent = ev => {
     if (ev.startsWith("sr:")){ handleSr(ev); return; }
     if (nativeWaiter){ const w = nativeWaiter; nativeWaiter = null; ev === "playing" ? w.resolve() : w.reject(ev); return; }
+    if (ev === "stopped" && nativeRadioOn && using === "radio"){
+      // Stop pressed in the notification, on the lock screen or on headphones
+      nativeRadioOn = false;
+      if (mode === "ring") enterMorning(false); else { stopSound(); if (mode === "morning") paintMorningMusic(); else if (mode === "night"){ earlyPlay = false; earlyStopped = true; } }
+      return;
+    }
     if (nativeRadioOn && using === "radio" && (ev === "error" || ev === "ended")) fallBack(`${curStation()[0]} dropped out, so playing chimes`);
   };
   function tryNative(u){
     return new Promise((resolve, reject) => {
       const t = setTimeout(()=>{ nativeWaiter = null; reject("timeout"); }, 15000);
       nativeWaiter = { resolve: ()=>{ clearTimeout(t); nativeRadioOn = true; resolve(); }, reject: why=>{ clearTimeout(t); reject(why); } };
-      try { NATIVE.radioPlay(u, 0.05); } catch(e){ clearTimeout(t); nativeWaiter = null; reject("native"); }
+      try {
+        if (NATIVE.radioService) NATIVE.radioPlay(u, 0.05, curStation()[0].replace("…",""));
+        else NATIVE.radioPlay(u, 0.05);
+      } catch(e){ clearTimeout(t); nativeWaiter = null; reject("native"); }
     });
   }
   function tryStream(u){

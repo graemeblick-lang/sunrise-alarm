@@ -3,7 +3,7 @@ name: Build Android app
 on:
   push:
     branches: [main]
-    paths: ["android/**", ".github/workflows/android.yml"]
+    paths: ["android/**", ".github/workflows/android.yml", "index.html"]
   workflow_dispatch:
 
 permissions:
@@ -39,6 +39,11 @@ jobs:
             echo "KEYSTORE_PASSWORD=$PASS" >> "$GITHUB_ENV"
             echo "::warning::KEYSTORE_PASSWORD secret not set, so this build uses a one-off key. Uninstall the old app before installing it."
           fi
+
+      - name: Bundle an offline copy of the app
+        run: |
+          mkdir -p android/app/src/main/assets/www
+          cp index.html manifest.webmanifest icon-192.png icon-512.png android/app/src/main/assets/www/
 
       - name: Build APK
         working-directory: android

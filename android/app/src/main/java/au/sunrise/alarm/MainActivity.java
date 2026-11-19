@@ -44,6 +44,7 @@ public class MainActivity extends Activity {
     private NativeAudio audio;
     private SpotifyRemote spotify;
     private volatile boolean captureVolume = false;
+    private boolean pageLoaded = false, usingBundled = false, launchWake = false;
     private GeolocationPermissions.Callback geoCallback;
     private String geoOrigin;
 
@@ -73,6 +74,7 @@ public class MainActivity extends Activity {
         web = new WebView(this);
         web.setBackgroundColor(0xFF000000);
         audio = new NativeAudio(this, this::sendAudioEvent);
+        PlaybackService.listener = this::sendAudioEvent;
         spotify = new SpotifyRemote(this::sendAudioEvent);
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
@@ -94,6 +96,19 @@ public class MainActivity extends Activity {
                     return true;
                 }
                 return false;   // Spotify login and the app itself stay inside
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String url) { pageLoaded = true; }
+
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest req, android.webkit.WebResourceError err) {
+                if (req.isForMainFrame()) loadBundled();
+            }
+
+            @Override
+            public void onReceivedHttpError(WebView view, WebResourceRequest req, android.webkit.WebResourceResponse resp) {
+                if (req.isForMainFrame() && resp.getStatusCode() >= 400) loadBundled();
             }
 
             @Override
@@ -124,7 +139,10 @@ public class MainActivity extends Activity {
             }
         } catch (Exception ignored) { }
 
-        web.loadUrl(APP_URL + (isWake(getIntent()) ? "#wake" : ""));
+        launchWake = isWake(getIntent());
+        web.loadUrl(APP_URL + (launchWake ? "#wake" : ""));
+        // If the website hasn't loaded within 10 s (no internet, GitHub down), use the copy built into the app
+        web.postDelayed(() -> { if (!pageLoaded) loadBundled(); }, 10000);
         clearWakeNotification();
     }
 
@@ -163,6 +181,7 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         if (audio != null) { audio.radioStop(); audio.musicRestore(); }
         if (spotify != null) spotify.disconnect();
+        PlaybackService.listener = null;
         super.onDestroy();
     }
 
@@ -216,6 +235,21 @@ public class MainActivity extends Activity {
             boolean ok = results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED;
             geoCallback.invoke(geoOrigin, ok, false);
             geoCallback = null;
+        }
+    }
+
+    /** Show the copy of the app that's built into the APK, on the same web address so settings are kept. */
+    private void loadBundled() {
+        if (usingBundled || web == null) return;
+        usingBundled = true;
+        try (java.io.InputStream in = getAssets().open("www/index.html")) {
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[16384]; int n;
+            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+            String html = new String(out.toByteArray(), java.nio.charset.StandardCharsets.UTF_8);
+            web.loadDataWithBaseURL(APP_URL + (launchWake ? "#wake" : ""), html, "text/html", "utf-8", null);
+        } catch (Exception e) {
+            App.save(this, "Loading the built-in copy", e);
         }
     }
 
@@ -295,9 +329,14 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void captureVolumeKeys(boolean on) { captureVolume = on; }
 
         // ----- audio -----
-        @JavascriptInterface public void radioPlay(String url, double volume) { runOnUiThread(() -> audio.radioPlay(url, (float) volume)); }
-        @JavascriptInterface public void radioVolume(double v) { runOnUiThread(() -> audio.radioVolume((float) v)); }
-        @JavascriptInterface public void radioStop() { runOnUiThread(() -> audio.radioStop()); }
+        // Radio plays in a background media service, so it keeps going if you switch apps
+        @JavascriptInterface public boolean radioService() { return true; }
+        @JavascriptInterface public void radioPlay(String url, double volume) { radioPlay(url, volume, "Radio"); }
+        @JavascriptInterface public void radioPlay(String url, double volume, String title) {
+            runOnUiThread(() -> PlaybackService.play(MainActivity.this, url, title, (float) volume));
+        }
+        @JavascriptInterface public void radioVolume(double v) { runOnUiThread(() -> PlaybackService.setVolume(MainActivity.this, (float) v)); }
+        @JavascriptInterface public void radioStop() { runOnUiThread(() -> PlaybackService.stop(MainActivity.this)); }
         /** Turns media volume down, then presses play in Spotify so it wakes up. */
         @JavascriptInterface public boolean spotifyWake() { audio.musicFadeStart(); return audio.spotifyKey(android.view.KeyEvent.KEYCODE_MEDIA_PLAY); }
         @JavascriptInterface public void spotifyPause() { audio.spotifyKey(android.view.KeyEvent.KEYCODE_MEDIA_PAUSE); }
