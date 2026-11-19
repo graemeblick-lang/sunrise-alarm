@@ -245,6 +245,10 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void spotifyPause() { audio.spotifyKey(android.view.KeyEvent.KEYCODE_MEDIA_PAUSE); }
         @JavascriptInterface public void musicVolume(double f) { audio.setMusic((float) f); }
         @JavascriptInterface public void musicRestore() { audio.musicRestore(); }
+        /** True if any app is playing audio right now (used to check Spotify really started). */
+        @JavascriptInterface public boolean musicActive() {
+            return ((android.media.AudioManager) getSystemService(AUDIO_SERVICE)).isMusicActive();
+        }
 
         @JavascriptInterface public void cancel() {
             try { AlarmScheduler.cancel(MainActivity.this); } catch (Throwable t) { App.save(MainActivity.this, "Cancelling the alarm", t); }

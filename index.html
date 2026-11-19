@@ -250,6 +250,10 @@
     </div>
 
     <div class="sub-panel" id="spotifyPanel">
+      <div id="spSimpleRow">
+        <div class="row"><span>Simple mode (no login)</span><div class="toggle" id="spSimpleTgl"></div></div>
+        <div class="hint" style="margin:0 0 10px">Presses play in the Spotify app and fades it in, so it plays whatever you last had on. Queue your wake-up playlist in Spotify before bed. Also used automatically as a backup if the connected mode can't start.</div>
+      </div>
       <div id="spState" class="hint" style="margin-top:0"></div>
       <div id="spSetup">
         <input type="text" id="spClient" placeholder="Spotify Client ID" autocomplete="off">
@@ -386,7 +390,7 @@
   ];
   const DEF = { time:"06:30", days:[1,2,3,4,5], dur:30, src:"chimes", station:0, customUrl:"", vol:70, fade:3, snooze:9, dim:2,
                 lat:-37.814, lon:144.963, place:"Melbourne", willy:"", todoToken:"",
-                spClient:"", spLink:"", spShuffle:true, spDevice:null, perDay:false, dayTimes:{}, theme:"sunrise", auto:true, skip:0 };
+                spClient:"", spLink:"", spShuffle:true, spDevice:null, spSimple:false, perDay:false, dayTimes:{}, theme:"sunrise", auto:true, skip:0 };
   const NATIVE = (window.Android && typeof window.Android.schedule === "function") ? window.Android : null;
   // Spotify tokens are kept separately from settings
   let SPT = {};
@@ -571,8 +575,13 @@
     $("songsPanel").classList.toggle("on", S.src==="songs");
     $("spotifyPanel").classList.toggle("on", S.src==="spotify");
     const spOn = !!SPT.refresh;
-    $("spSetup").style.display = spOn ? "none" : "";
-    $("spReady").style.display = spOn ? "" : "none";
+    const simpleOK = !!(NATIVE && typeof NATIVE.spotifyWake === "function");
+    $("spSimpleRow").style.display = simpleOK ? "" : "none";
+    $("spSimpleTgl").classList.toggle("on", simpleOK && S.spSimple);
+    const simpleOn = simpleOK && S.spSimple;
+    $("spSetup").style.display = (spOn || simpleOn) ? "none" : "";
+    $("spReady").style.display = (spOn && !simpleOn) ? "" : "none";
+    $("spState").style.display = simpleOn ? "none" : "";
     $("spState").textContent = spOn ? "✓ Spotify connected" + (S.spDevice ? ` · plays on ${S.spDevice.name}` : " · pick a speaker below") : "Needs Spotify Premium and a one-time setup.";
     $("spRedirect").textContent = SP.redirect();
     $("spClient").value = S.spClient; $("spLink").value = S.spLink;
@@ -766,6 +775,7 @@
   $("spLogout").onclick = () => { SPT = {}; saveSPT(); S.spDevice = null; save(); paint(); };
   $("spLink").onchange = e => { S.spLink = e.target.value.trim(); save(); if (S.spLink && !SP.parseLink(S.spLink)) toast("That doesn't look like a Spotify link"); };
   $("spClient").onchange = e => { S.spClient = e.target.value.trim(); save(); };
+  $("spSimpleTgl").onclick = () => { S.spSimple = !S.spSimple; save(); paint(); };
   $("spShuffle").onclick = () => { S.spShuffle = !S.spShuffle; save(); paint(); };
 
   // ---------- Audio engine ----------
@@ -875,8 +885,27 @@
   const NATIVE_SP = !!(NATIVE && typeof NATIVE.spotifyWake === "function");
   let spNativeFade = false;
   const sleep = ms => new Promise(r=>setTimeout(r, ms));
+  const musicPlaying = () => { try { return !!(NATIVE && NATIVE.musicActive && NATIVE.musicActive()); } catch(e){ return false; } };
+  // No-login mode: press play in the Spotify app, fade the phone's media volume up, and check sound really started
+  async function startSpotifySimple(already){
+    using = "spotify";
+    $("rNow").textContent = "Starting Spotify…";
+    if (!already){ let ok = false; try { ok = NATIVE.spotifyWake(); } catch(e){} if (!ok) return spotifyFail("Spotify isn't installed"); spNativeFade = true; }
+    for (let i = 0; i < 8; i++){
+      if (using !== "spotify") return;
+      if (musicPlaying()){ $("rNow").textContent = "🎵 Spotify (what you last played)"; return; }
+      await sleep(1000);
+    }
+    spotifyFail("Spotify didn't start");
+  }
+  function spotifyFail(why){
+    if (using !== "spotify") return;
+    if (spNativeFade){ try { NATIVE.spotifyPause(); NATIVE.musicRestore(); } catch(e){} spNativeFade = false; }
+    using = "spotify-failed"; startChimes(); $("rNow").textContent = why + ", so playing chimes";
+  }
   async function startSpotify(){
     using = "spotify"; spDev = null; spLastVol = -1; spNativeFade = false;
+    if (NATIVE_SP && (S.spSimple || !SPT.refresh)) return startSpotifySimple(false);
     $("rNow").textContent = "Starting Spotify…";
     const body = SP.parseLink(S.spLink);
     try {
@@ -909,8 +938,9 @@
       if (using !== "spotify") return;
       const why = e==="login" ? "Spotify isn't connected" : e==="link" ? "No Spotify playlist set" :
                   e==="device" ? "Spotify isn't showing this phone" : "Spotify didn't start";
-      if (spNativeFade){ try { NATIVE.spotifyPause(); NATIVE.musicRestore(); } catch(e){} spNativeFade = false; }
-      using = "spotify-failed"; startChimes(); $("rNow").textContent = why + ", so playing chimes";
+      // Backup: in the Android app, fall back to simple mode (Spotify may already be playing from the wake-up press)
+      if (NATIVE_SP && spNativeFade) return startSpotifySimple(true);
+      spotifyFail(why);
     }
   }
 
