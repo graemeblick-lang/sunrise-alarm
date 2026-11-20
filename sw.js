@@ -1,6 +1,8 @@
 // Caches the app itself so it opens even if the Wi-Fi is down.
-const CACHE = "sunrise-v17";
-const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
+const CACHE = "sunrise-v19";
+const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png", "./fonts.css",
+  "./fonts/outfit-latin-200-normal.woff2", "./fonts/outfit-latin-300-normal.woff2", "./fonts/outfit-latin-400-normal.woff2",
+  "./fonts/outfit-latin-600-normal.woff2", "./fonts/roboto-flex-latin-opsz-normal.woff2"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));

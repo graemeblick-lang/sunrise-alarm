@@ -3,7 +3,10 @@ name: Build Android app
 on:
   push:
     branches: [main]
-    paths: ["android/**", ".github/workflows/android.yml", "index.html"]
+    paths: ["android/**", ".github/workflows/android.yml", "index.html", "fonts.css", "fonts/**", "manifest.webmanifest", "*.png", "tests/**"]
+  # Pull requests build and test too, but don't publish
+  pull_request:
+    paths: ["android/**", ".github/workflows/android.yml", "index.html", "fonts.css", "fonts/**", "manifest.webmanifest", "*.png", "tests/**"]
   workflow_dispatch:
 
 permissions:
@@ -14,6 +17,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Test the alarm schedule
+        run: |
+          # Run in two time zones, one with daylight saving, to catch date maths mistakes
+          TZ=Australia/Melbourne node tests/schedule.test.js
+          TZ=UTC node tests/schedule.test.js
 
       - uses: actions/setup-java@v4
         with:
@@ -27,9 +40,14 @@ jobs:
       - name: Signing key
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
-          # The keystore file is in the repo, locked with a password that only lives in a private GitHub secret.
-          if [ -n "$KEYSTORE_PASSWORD" ]; then
+          # Preferred: the keystore itself lives in a private secret (KEYSTORE_BASE64), not in the repo.
+          # Otherwise the keystore file in the repo is used, locked with a password that only lives in a secret.
+          if [ -n "$KEYSTORE_PASSWORD" ] && [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > android/app/release.jks
+            echo "KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+          elif [ -n "$KEYSTORE_PASSWORD" ]; then
             cp android/release.jks android/app/release.jks
             echo "KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
           else
@@ -40,24 +58,58 @@ jobs:
             echo "::warning::KEYSTORE_PASSWORD secret not set, so this build uses a one-off key. Uninstall the old app before installing it."
           fi
 
-      - name: Bundle an offline copy of the app
-        run: |
-          mkdir -p android/app/src/main/assets/www
-          cp index.html manifest.webmanifest icon-192.png icon-512.png android/app/src/main/assets/www/
-
       - name: Build APK
         working-directory: android
         env:
           VERSION_CODE: ${{ github.run_number }}
+          # Your Spotify developer app's Client ID: Settings → Secrets and variables → Actions → Variables
+          SPOTIFY_CLIENT_ID: ${{ vars.SPOTIFY_CLIENT_ID }}
+        # The web app is built into the APK by the copyWebApp task in android/app/build.gradle
         run: gradle assembleRelease --no-daemon --stacktrace
 
+      - name: Check the web app is inside the APK
+        run: |
+          unzip -l android/app/build/outputs/apk/release/app-release.apk | grep -E "assets/www/(index.html|fonts.css)"
+
+      - name: Keep the APK from this build
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: SunriseAlarm-test-build
+          path: android/app/build/outputs/apk/release/app-release.apk
+          retention-days: 7
+
+      - name: Publish the test build
+        # Pull requests from this repo publish their APK to a separate "Test build" pre-release,
+        # so it can be installed with one tap. It never replaces the normal "latest" Release.
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk SunriseAlarm-test.apk
+          gh release delete test --yes --cleanup-tag || true
+          printf 'Test build from pull request #%s: %s\n\nOn your phone, tap SunriseAlarm-test.apk below to download it, then open it to install. It updates the app in place and keeps your settings.\n\nThis is a test version. The normal version is the "Sunrise Alarm for Android" release.\n' \
+            "$PR_NUMBER" "$PR_TITLE" > notes.txt
+          gh release create test SunriseAlarm-test.apk \
+            --target "$PR_SHA" \
+            --title "Test build (pull request #$PR_NUMBER)" \
+            --notes-file notes.txt \
+            --prerelease \
+            --latest=false
+
       - name: Publish to Releases
+        if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp android/app/build/outputs/apk/release/app-release.apk SunriseAlarm.apk
+          # The app reads this to offer updates
+          echo "{\"versionCode\": ${{ github.run_number }}}" > version.json
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest SunriseAlarm.apk \
+          gh release create latest SunriseAlarm.apk version.json \
             --title "Sunrise Alarm for Android" \
             --notes "On your phone, tap SunriseAlarm.apk below to download it, then open it to install." \
             --latest
