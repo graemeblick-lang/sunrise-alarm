@@ -530,6 +530,8 @@
                 lat:-37.814, lon:144.963, place:"Melbourne", willy:"", todoToken:"", myStations:[],
                 spClient:"", spLink:"", spName:"", spShuffle:true, spAppOk:false, appPkg:"", appName:"", earlyMin:0, earlyVol:25, sunMax:60, sunCustom:false, sunCols:["#3a0d02","#ff7a26","#fff1d6"], pauseUntil:"", perDay:false, dayTimes:{}, theme:"sunrise", auto:true, skip:0 };
   const NATIVE = (window.Android && typeof window.Android.schedule === "function") ? window.Android : null;
+  // Android app: the settings screens are native, so the page's own never shows (no flash while it hands over)
+  if (NATIVE && typeof NATIVE.showHome === "function") document.getElementById("setup").classList.remove("on");
   // Spotify now connects through the Spotify app only; remove internet login tokens left by older versions
   try { localStorage.removeItem("sunrise-spotify"); } catch(e){}
   let S = { ...DEF };
@@ -1428,7 +1430,10 @@
 
   // ---------- State machine ----------
   let mode = "setup", alarmAt = null, sunriseStart = null, snoozeUntil = null, preview = false, lastShift = 0, wxFetchedAtSunrise = false;
+  // Android app: the settings screens are native. When the page would show its own, it hands back to them.
+  const HAS_NATIVE_HOME = !!(NATIVE && typeof NATIVE.showHome === "function");
   const show = id => {
+    if (id === "setup" && HAS_NATIVE_HOME){ try { if (NATIVE.showHome()) return; } catch(e){} }
     document.querySelectorAll(".screen").forEach(s=>s.classList.toggle("on", s.id===id));
     if (id==="setup") bright(-1); else if (id==="ring" || id==="morning") bright(1);
   };
@@ -1699,6 +1704,17 @@
   if (PAGES.includes(location.hash.slice(1))) history.replaceState(null, "", location.pathname);
   const wakeHash = location.hash.match(/^#wake(?:=(\d+))?$/);
   if (wakeHash){ history.replaceState(null, "", location.pathname); setTimeout(()=>window.nativeWake(+wakeHash[1] || 0), 300); }
+
+  // Goodnight / Preview pressed on the native home screen
+  window.nativeStart = a => {
+    if (a === "goodnight") enterNight(false); else if (a === "preview") enterNight(true);
+    if (mode === "setup") show("setup");   // e.g. no alarm set: back to the home screen
+  };
+  if (HAS_NATIVE_HOME){
+    let start = ""; try { start = NATIVE.takeStartAction ? NATIVE.takeStartAction() : ""; } catch(e){}
+    if (start) window.nativeStart(start);
+    else if (mode === "setup" && !wakeHash) show("setup");   // nothing to do here: back to the home screen
+  }
 })();
 </script>
 </body>

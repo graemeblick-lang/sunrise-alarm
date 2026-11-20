@@ -84,7 +84,7 @@ fun SunriseTheme(themeKey: String, content: @Composable () -> Unit) {
 /** A settings screen: large collapsing title with Back, and a scrolling column of content. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScaffold(title: String, onBack: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+fun SettingsScaffold(title: String, onBack: (() -> Unit)?, content: @Composable ColumnScope.() -> Unit) {
     val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
         modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
@@ -92,7 +92,7 @@ fun SettingsScaffold(title: String, onBack: () -> Unit, content: @Composable Col
             LargeTopAppBar(
                 title = { Text(title) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+                    if (onBack != null) IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
                 scrollBehavior = scroll,
             )

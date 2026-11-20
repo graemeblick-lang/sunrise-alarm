@@ -230,7 +230,7 @@ private fun NextAlarmCard(s: AlarmSettings, is24Hour: Boolean) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TimeDialog(title: String, initial: LocalTime, is24Hour: Boolean, onDismiss: () -> Unit, onConfirm: (LocalTime) -> Unit) {
+internal fun TimeDialog(title: String, initial: LocalTime, is24Hour: Boolean, onDismiss: () -> Unit, onConfirm: (LocalTime) -> Unit) {
     val state = rememberTimePickerState(initialHour = initial.hour, initialMinute = initial.minute, is24Hour = is24Hour)
     AlertDialog(
         onDismissRequest = onDismiss,

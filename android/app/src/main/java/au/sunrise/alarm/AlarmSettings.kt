@@ -47,6 +47,28 @@ data class AlarmSettings(
         return null
     }
 
+    /**
+     * The next [count] alarms as (sunrise start, alarm) epoch ms, like the page's alarmPlan(): what Android keeps
+     * scheduled by itself. Empty if "Wake me automatically" is off.
+     */
+    fun plan(from: ZonedDateTime, count: Int = 8): List<Pair<Long, Long>> {
+        if (!auto) return emptyList()
+        val out = ArrayList<Pair<Long, Long>>()
+        var t = from
+        while (out.size < count) {
+            val a = nextAlarm(t) ?: break
+            val ms = a.toInstant().toEpochMilli()
+            out += (ms - dur * 60_000L) to ms
+            if (days.isEmpty()) break                 // one-off alarm
+            t = a.plusSeconds(1)
+        }
+        return out
+    }
+
+    /** The plan as the JSON the alarm scheduler takes: [[sunriseMs, alarmMs], ...]. */
+    fun planJson(from: ZonedDateTime): String =
+        plan(from).joinToString(",", "[", "]") { (s, a) -> "[$s,$a]" }
+
     fun into(j: JSONObject) {
         j.put("time", time)
         j.put("days", JSONArray(days.sorted()))
