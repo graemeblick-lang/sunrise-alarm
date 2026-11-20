@@ -359,6 +359,7 @@
       <div class="sub-panel" id="appsPanel">
         <select id="musicApp"></select>
         <div class="hint">Presses play in that app and fades it in, so it plays whatever you last had on there. Queue your wake-up music in the app before bed. If nothing plays, the chimes take over.</div>
+        <div class="hint">Some apps, like YouTube Music, don't let other apps start them, so you'll get chimes. Spotify, Podcast Addict, the radio and your own songs work.</div>
       </div>
 
       <div class="row" style="margin-top:10px"><button class="small" id="testSound">▶ Test sound</button><span id="testState" class="hint" style="margin:0"></span></div>
@@ -1282,8 +1283,6 @@
     holdFocus(false);
     clearInterval(chimeTimer); chimeTimer = null;
     try { if (ac && ac.state === "running") await ac.suspend(); } catch(e){}
-    // If something was already playing, "music is playing" wouldn't prove the chosen app started
-    const wasPlaying = musicPlaying();
     if (!already){
       let ok = false;
       try { ok = SMART_APPS ? NATIVE.appStart(pkg) : (NATIVE.appWake ? NATIVE.appWake(pkg) : NATIVE.spotifyWake()); } catch(e){}
@@ -1293,13 +1292,12 @@
     for (let i = 0; i < 12; i++){
       await sleep(1000);
       if (using !== kind) return;
-      const st = appState(pkg);
-      // "playing": its own session says so. "unknown" (the app didn't let us connect): the press went only to
-      // that app, so new music playing is very likely it.
-      if (st === "playing" || (st === "unknown" && !wasPlaying && musicPlaying())){ $("rNow").textContent = `🎵 ${name}`; return; }
+      // Started if its own session says "playing", or music is now playing: the press went only to that app.
+      // (Don't trust "not playing" from the session: some apps, like Spotify, report a separate session here.)
+      if (appState(pkg) === "playing" || musicPlaying()){ $("rNow").textContent = `🎵 ${name}`; return; }
       if (i === 3 && SMART_APPS) try { NATIVE.appRetry(pkg); } catch(e){}   // some apps need a second ask once awake
     }
-    simpleFail(kind, `${name} didn't start playing`);
+    simpleFail(kind, kind === "app" ? `${name} didn't start (some apps don't let other apps start them)` : `${name} didn't start playing`);
   }
   const startSpotifySimple = already => startSimple("spotify", "com.spotify.music", "Spotify", already);
   function simpleFail(kind, why){

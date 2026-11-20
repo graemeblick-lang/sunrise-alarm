@@ -73,12 +73,12 @@ final class MediaApps {
     }
 
     void pause(String pkg) {
+        // Both ways: the session Sunrise connected to isn't always the one playing (Spotify)
         MediaController c = controller;
         if (c != null && pkg != null && pkg.equals(controllerPkg)) {
             try { c.getTransportControls().pause(); } catch (Exception ignored) { }
-        } else if (pkg != null) {
-            audio.appKey(pkg, KeyEvent.KEYCODE_MEDIA_PAUSE);
         }
+        if (pkg != null) audio.appKey(pkg, KeyEvent.KEYCODE_MEDIA_PAUSE);
         main.post(this::disconnect);
     }
 
