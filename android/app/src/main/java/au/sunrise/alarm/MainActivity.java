@@ -65,7 +65,7 @@ public class MainActivity extends Activity {
     private WebView web;
     private NativeAudio audio;
     private MediaApps media;
-    /** Audio focus held while the page plays chimes or your songs, so other apps pause for the alarm. */
+    /** Audio focus held while the page plays its chimes, so other apps pause for the alarm. */
     private AudioFocusRequest focusReq;
     private SpotifyRemote spotify;
     private volatile boolean captureVolume = false;
@@ -77,6 +77,8 @@ public class MainActivity extends Activity {
     private volatile boolean foreignPage = false;
     private boolean pageLoaded = false;
     private long wakeAlarm = 0;   // the alarm this launch is for (0 = normal launch)
+    /** "goodnight" or "preview" from the native home screen, waiting for the page to ask for it. */
+    private volatile String startAction = "";
     /** A Spotify link shared to the app, waiting for the page to be ready. */
     private String[] pendingShare;
     private GeolocationPermissions.Callback geoCallback;
@@ -87,8 +89,7 @@ public class MainActivity extends Activity {
         super.onCreate(saved);
         File crash = new File(getFilesDir(), App.CRASH_FILE);
         boolean alarmSoon = isWake(getIntent()) || AlarmScheduler.activeAlarm(this, QUIET_BEFORE_ALARM) > 0;
-        // The crash report waits for a normal daytime launch. It never stands between you and an alarm.
-        if (crash.exists() && !alarmSoon) { showReport(crash); return; }
+        // A saved crash report is shown on the native home screen, never here: this screen is for the night and the alarm
         try {
             start();
         } catch (Throwable t) {
@@ -115,6 +116,12 @@ public class MainActivity extends Activity {
 
         // A music fade that was cut short (app closed mid-alarm) left the media volume low: put it back
         if (AlarmScheduler.activeAlarm(this, 0) == 0) audio.musicRestore();
+        // "Your songs" was removed: give back the permission to read song files picked for it
+        try {
+            for (android.content.UriPermission p : getContentResolver().getPersistedUriPermissions()) {
+                getContentResolver().releasePersistableUriPermission(p.getUri(), Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            }
+        } catch (Exception ignored) { }
         // Make sure the system alarms match what's saved (cheap, and fixes anything Android dropped)
         AlarmScheduler.reschedule(this);
 
@@ -125,6 +132,7 @@ public class MainActivity extends Activity {
         } catch (Exception ignored) { }
 
         wakeAlarm = wakeAlarmFor(getIntent());
+        takeStart(getIntent());
         takeShare(getIntent());
         buildWeb();
         loadApp();
@@ -261,6 +269,15 @@ public class MainActivity extends Activity {
         } catch (Exception ignored) { }
     }
 
+    /** Goodnight / Preview pressed on the native home screen. */
+    private boolean takeStart(Intent i) {
+        String a = i == null ? null : i.getStringExtra("start");
+        if (!"goodnight".equals(a) && !"preview".equals(a)) return false;
+        startAction = a;
+        i.removeExtra("start");
+        return true;
+    }
+
     /** Keeps a Spotify link shared to Sunrise (Spotify → Share → Sunrise). Anything else is ignored. */
     private boolean takeShare(Intent i) {
         if (i == null || !Intent.ACTION_SEND.equals(i.getAction())) return false;
@@ -295,6 +312,10 @@ public class MainActivity extends Activity {
         super.onNewIntent(intent);
         setIntent(intent);
         if (takeShare(intent) && pageLoaded) deliverShare();
+        if (takeStart(intent) && pageLoaded && web != null) {
+            String a = startAction; startAction = "";
+            web.evaluateJavascript("window.nativeStart && window.nativeStart(" + JSONObject.quote(a) + ")", null);
+        }
         if (web != null && isWake(intent)) {
             long ms = intent.getLongExtra(AlarmScheduler.EXTRA_ALARM, 0);
             if (pageLoaded) web.evaluateJavascript("window.nativeWake && window.nativeWake(" + ms + ")", null);
@@ -338,7 +359,12 @@ public class MainActivity extends Activity {
     }
 
     @Override
-    protected void onResume() { super.onResume(); try { goFullscreen(); } catch (Exception ignored) { } }
+    protected void onResume() {
+        super.onResume();
+        try { goFullscreen(); } catch (Exception ignored) { }
+        // Back from the native settings screens: the page reloads the shared settings (and reschedules)
+        if (web != null && pageLoaded) web.evaluateJavascript("window.nativeSettingsChanged && window.nativeSettingsChanged()", null);
+    }
 
     /** Shows what went wrong last time, with a button to copy it. */
     private void showReport(File crash) {
@@ -491,17 +517,9 @@ public class MainActivity extends Activity {
         /** Installed apps that accept play/pause buttons, as JSON [{pkg,label}]. */
         @JavascriptInterface public String listMusicApps() {
             if (!ok()) return "[]";
-            PackageManager pm = getPackageManager();
-            List<ResolveInfo> found = pm.queryBroadcastReceivers(new Intent(Intent.ACTION_MEDIA_BUTTON), 0);
-            Map<String, String> apps = new LinkedHashMap<>();
-            for (ResolveInfo r : found) {
-                String pkg = r.activityInfo.packageName;
-                if (pkg.equals(getPackageName()) || apps.containsKey(pkg)) continue;
-                try { apps.put(pkg, pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()); } catch (Exception ignored) { }
-            }
             JSONArray arr = new JSONArray();
             try {
-                for (Map.Entry<String, String> e : apps.entrySet()) arr.put(new JSONObject().put("pkg", e.getKey()).put("label", e.getValue()));
+                for (String[] a : MediaApps.list(MainActivity.this)) arr.put(new JSONObject().put("pkg", a[0]).put("label", a[1]));
             } catch (Exception ignored) { }
             return arr.toString();
         }
@@ -567,19 +585,54 @@ public class MainActivity extends Activity {
             });
         }
 
-        /** Comma-separated list of settings that would stop the alarm working properly. */
+        /** Comma-separated list of settings that would stop the alarm working properly (see PhoneChecks). */
         @JavascriptInterface public String problems() {
             StringBuilder sb = new StringBuilder();
-            NotificationManager nm = getSystemService(NotificationManager.class);
-            if (!nm.areNotificationsEnabled()) sb.append("notifications,");
-            if (Build.VERSION.SDK_INT >= 34 && !nm.canUseFullScreenIntent()) sb.append("fullscreen,");
-            if (Build.VERSION.SDK_INT >= 31 && !getSystemService(AlarmManager.class).canScheduleExactAlarms()) sb.append("exact,");
-            if (!getSystemService(PowerManager.class).isIgnoringBatteryOptimizations(getPackageName())) sb.append("battery,");
+            for (String p : PhoneChecks.problems(MainActivity.this)) sb.append(p).append(',');
             return sb.toString();
         }
 
         /** True when the app has the native backup alarm (so the page can say so). */
         @JavascriptInterface public boolean hasBackupAlarm() { return true; }
+
+        // ----- hand-over with the native home screen -----
+        /** "goodnight" or "preview" if the native home screen started us for that (once), else "". */
+        @JavascriptInterface public String takeStartAction() {
+            if (!ok()) return "";
+            String a = startAction; startAction = "";
+            return a;
+        }
+        /** The page is back on its settings screen: show the native home screen instead, and close this one. */
+        @JavascriptInterface public boolean showHome() {
+            if (!ok()) return false;
+            runOnUiThread(() -> {
+                startActivity(new Intent(MainActivity.this, SettingsActivity.class)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP));
+                finish();
+            });
+            return true;
+        }
+
+        // ----- settings, shared with the native settings screens (SettingsStore) -----
+        /** The shared settings JSON, or "" if the page hasn't saved any here yet. */
+        @JavascriptInterface public String getSettings() {
+            return ok() && SettingsStore.has(MainActivity.this) ? SettingsStore.read(MainActivity.this).toString() : "";
+        }
+        @JavascriptInterface public void putSettings(String json) { if (ok()) SettingsStore.write(MainActivity.this, json); }
+        /** Something a native settings screen asked the page to do on return ("preview"), once. */
+        @JavascriptInterface public String takeSettingsAction() {
+            if (!ok()) return "";
+            android.content.SharedPreferences p = getSharedPreferences(AlarmScheduler.PREFS, 0);
+            String a = p.getString(SettingsActivity.PREF_ACTION, "");
+            p.edit().remove(SettingsActivity.PREF_ACTION).apply();
+            return a;
+        }
+        /** Opens a native settings screen ("alarm", "look", "morning"). */
+        @JavascriptInterface public boolean openSettings(String page) {
+            if (!ok() || !SettingsActivity.Companion.getPAGES().contains(page)) return false;
+            runOnUiThread(() -> startActivity(new Intent(MainActivity.this, SettingsActivity.class).putExtra("page", page)));
+            return true;
+        }
 
         // ----- version and updates -----
         @JavascriptInterface public String appVersion() { return BuildConfig.VERSION_NAME; }
@@ -592,22 +645,6 @@ public class MainActivity extends Activity {
             });
         }
 
-        @JavascriptInterface public void fix(String what) {
-            if (!ok()) return;
-            Intent i;
-            Uri pkg = Uri.parse("package:" + getPackageName());
-            if ("fullscreen".equals(what) && Build.VERSION.SDK_INT >= 34) {
-                i = new Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, pkg);
-            } else if ("exact".equals(what) && Build.VERSION.SDK_INT >= 31) {
-                i = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, pkg);
-            } else if ("battery".equals(what)) {
-                i = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkg);
-            } else {
-                i = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName());
-            }
-            try { startActivity(i); } catch (Exception e) {
-                try { startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg)); } catch (Exception ignored) { }
-            }
-        }
+        @JavascriptInterface public void fix(String what) { if (ok()) PhoneChecks.fix(MainActivity.this, what); }
     }
 }

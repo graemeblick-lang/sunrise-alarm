@@ -3,7 +3,7 @@
 A sunrise wake-up light and alarm for an old phone on a bedside stand.
 
 - Sunrise glow on the screen before the alarm
-- Wake to Spotify, internet radio, your own songs or gentle chimes
+- Wake to Spotify, internet radio, another music app or gentle chimes
 - Morning screen with weather (Open-Meteo), daylight times and Todoist tasks
 
 Open https://graemeblick-lang.github.io/sunrise-alarm/ in Chrome on Android, then ⋮ → Add to home screen → Install.
@@ -14,7 +14,7 @@ The Android app is self-contained: the screens (`index.html`, fonts and icons) a
 
 GitHub builds it automatically. Download `SunriseAlarm.apk` from the latest Release on your phone and open it to install. After that, the app tells you on its main screen when a newer version is ready (it checks GitHub Releases at most twice a day, never near an alarm).
 
-The web page still keeps the same address inside the app (`graemeblick-lang.github.io/sunrise-alarm/`), but every request to it is answered from the APK. That keeps your saved settings, songs and logins, and the Spotify login redirect, working unchanged. The GitHub Pages site is only needed if you want to use the app in a browser instead.
+The web page still keeps the same address inside the app (`graemeblick-lang.github.io/sunrise-alarm/`), but every request to it is answered from the APK. That keeps your saved settings and logins, and the Spotify login redirect, working unchanged. The GitHub Pages site is only needed if you want to use the app in a browser instead.
 
 ### Spotify
 
@@ -47,6 +47,7 @@ For best results, tap **Fix** next to anything the Settings → Status card flag
 ## Development
 
 - `index.html` is the whole web app. `android/app/build.gradle` copies it (with `fonts.css`, `fonts/`, the manifest and icons) into the APK at build time; `LocalSite.java` serves it.
+- The app opens on a native home screen (`HomeScreen.kt`, in `SettingsActivity.kt`, Jetpack Compose with Material 3). The web page (`MainActivity.java`) only runs for the night, alarm and morning screens: Goodnight and Preview hand over to it, and it hands back when it would show its own settings. Android computes and keeps the alarm schedule itself (`AlarmSettings.plan`, checked against the page's `alarmPlan`). The settings screens: `AlarmScreen.kt`, `LookScreen.kt`, `MorningScreen.kt`, `SoundScreen.kt` and `StationsScreen.kt`, with shared parts in `SettingsUi.kt` and `Themes.kt`.  The native Test sound (`SoundTester.kt`, `ChimePlayer.kt`) plays every source natively. `tests/stations.test.js` checks the native copy of the built-in stations matches the page. Both sides share one settings store (`SettingsStore.kt`, the same JSON the page uses), and the page reloads it when you come back from a native screen. The native next-alarm logic (`AlarmSettings.kt`) has unit tests matching the JavaScript ones: `gradle testReleaseUnitTest`.
 - Fonts are bundled from Fontsource (SIL Open Font License, see `fonts/`).
 - The alarm schedule logic sits between the `schedule:start` and `schedule:end` markers and is tested by `tests/schedule.test.js`:
   `TZ=Australia/Melbourne node tests/schedule.test.js`

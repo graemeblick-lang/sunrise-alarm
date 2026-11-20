@@ -58,7 +58,6 @@
   .warn{color:var(--amber)}
   .sub-panel{display:none;margin-top:10px}
   .sub-panel.on{display:block}
-  #songList{font-size:14px;color:#cdbcae;margin:8px 0;line-height:1.6}
   .fc{display:flex;gap:10px;align-items:center;font-size:15px;color:#e2cdb9}
   .fc .em{font-size:28px}
 
@@ -164,7 +163,7 @@
   #setup .chips:not(.days) .chip.sel{background:var(--md-secondary-container);color:var(--md-on-secondary-container);font-weight:600}
   #setup .chips:not(.days) .chip.sel::before{content:"✓ "}
   #setup .row .chips:not(.days){flex:0 0 auto;min-width:168px}
-  /* Rows of tonal buttons (Add songs, Find speakers…) stay as separate pills */
+  /* Rows of tonal buttons stay as separate pills */
   #setup .chips.btnrow{border:0;height:auto;overflow:visible;gap:8px;flex-wrap:wrap}
 
   /* Day filter chips */
@@ -202,7 +201,6 @@
   #setup .dt{border-top:1px solid var(--md-outline-var)}
   #setup .dt span{color:var(--md-on-surface)}
   #setup .dt input{color:var(--md-on-surface);font-family:"Roboto Flex",sans-serif}
-  #setup #songList{color:var(--md-on-surface-var)}
   #setup .fc{color:var(--md-on-surface)}
 
   /* ---- settings pages ---- */
@@ -330,16 +328,6 @@
         <div class="hint">Needs internet. If the stream won't play, it falls back to the chimes.</div>
       </div>
 
-      <div class="sub-panel" id="songsPanel">
-        <div id="songList">No songs added yet.</div>
-        <div class="chips btnrow">
-          <button class="small" id="addSongs">Add songs from phone</button>
-          <button class="small" id="clearSongs">Clear</button>
-        </div>
-        <input type="file" id="songFile" accept="audio/*" multiple hidden>
-        <div class="hint">Songs are saved inside the app, so they play even without internet. They play in shuffled order.</div>
-      </div>
-
       <div class="sub-panel" id="spotifyPanel">
         <div class="spbox" style="margin-top:0">
           <div class="row"><span><b>Spotify</b></span><span id="spAppState" class="pill"></span></div>
@@ -359,7 +347,7 @@
       <div class="sub-panel" id="appsPanel">
         <select id="musicApp"></select>
         <div class="hint">Presses play in that app and fades it in, so it plays whatever you last had on there. Queue your wake-up music in the app before bed. If nothing plays, the chimes take over.</div>
-        <div class="hint">Some apps, like YouTube Music, don't let other apps start them, so you'll get chimes. Spotify, Podcast Addict, the radio and your own songs work.</div>
+        <div class="hint">Some apps, like YouTube Music, don't let other apps start them, so you'll get chimes. Spotify, Podcast Addict and the radio work.</div>
       </div>
 
       <div class="row" style="margin-top:10px"><button class="small" id="testSound">▶ Test sound</button><span id="testState" class="hint" style="margin:0"></span></div>
@@ -542,11 +530,22 @@
                 lat:-37.814, lon:144.963, place:"Melbourne", willy:"", todoToken:"", myStations:[],
                 spClient:"", spLink:"", spName:"", spShuffle:true, spAppOk:false, appPkg:"", appName:"", earlyMin:0, earlyVol:25, sunMax:60, sunCustom:false, sunCols:["#3a0d02","#ff7a26","#fff1d6"], pauseUntil:"", perDay:false, dayTimes:{}, theme:"sunrise", auto:true, skip:0 };
   const NATIVE = (window.Android && typeof window.Android.schedule === "function") ? window.Android : null;
+  // Android app: the settings screens are native, so the page's own never shows (no flash while it hands over)
+  if (NATIVE && typeof NATIVE.showHome === "function") document.getElementById("setup").classList.remove("on");
   // Spotify now connects through the Spotify app only; remove internet login tokens left by older versions
   try { localStorage.removeItem("sunrise-spotify"); } catch(e){}
   let S = { ...DEF };
   try { const s = JSON.parse(localStorage.getItem("sunrise-settings") || "null"); if (s) S = { ...DEF, ...s }; } catch(e){}
-  const save = () => { try { localStorage.setItem("sunrise-settings", JSON.stringify(S)); } catch(e){} };
+  // Android app: settings are shared with the native settings screens (SettingsStore.kt). The app's copy wins:
+  // native screens may have changed it. The page sends its whole settings object there on every save.
+  const HAS_NATIVE_SETTINGS = !!(NATIVE && typeof NATIVE.getSettings === "function");
+  const nativeSettings = () => { try { const j = HAS_NATIVE_SETTINGS ? NATIVE.getSettings() : ""; return j ? JSON.parse(j) : null; } catch(e){ return null; } };
+  const save = () => {
+    const j = JSON.stringify(S);
+    try { localStorage.setItem("sunrise-settings", j); } catch(e){}
+    if (HAS_NATIVE_SETTINGS) try { NATIVE.putSettings(j); } catch(e){}
+  };
+  { const ns = nativeSettings(); if (ns) S = { ...DEF, ...ns }; else if (HAS_NATIVE_SETTINGS) save(); }
 
   const $ = id => document.getElementById(id);
   // fetch that gives up after a while, so a bad connection can't leave things hanging at alarm time
@@ -691,7 +690,7 @@
   chipGroup($("durChips"), [15,20,30,45], "dur", v=>`${v} min`);
   chipGroup($("snzChips"), [5,9,15], "snooze", v=>`${v}m`);
   chipGroup($("fadeChips"), [1,3,5], "fade", v=>`${v}m`);
-  chipGroup($("srcChips"), ["chimes","radio","spotify","songs","apps"], "src", v=>({chimes:"Chimes",spotify:"Spotify",radio:"Radio",songs:"Songs",apps:"Apps"})[v]);
+  chipGroup($("srcChips"), ["chimes","radio","spotify","apps"], "src", v=>({chimes:"Chimes",spotify:"Spotify",radio:"Radio",apps:"Apps"})[v]);
   const HAS_APPS = !!(NATIVE && typeof NATIVE.listMusicApps === "function");
   if (!HAS_APPS) $("srcChips").querySelector('[data-v="apps"]').remove();
   if (!(NATIVE && typeof NATIVE.spotifyWake === "function")) $("srcChips").querySelector('[data-v="spotify"]').remove();
@@ -813,10 +812,10 @@
     const sel = (id,key) => [...$(id).children].forEach(b=>b.classList.toggle("sel", String(b.dataset.v)===String(S[key])));
     sel("durChips","dur"); sel("snzChips","snooze"); sel("fadeChips","fade"); sel("srcChips","src");
     $("radioPanel").classList.toggle("on", S.src==="radio");
-    $("songsPanel").classList.toggle("on", S.src==="songs");
     $("spotifyPanel").classList.toggle("on", S.src==="spotify");
     if (S.src==="apps" && !HAS_APPS) S.src = "chimes";
     if (S.src==="spotify" && !NATIVE_SP) S.src = "chimes";
+    if (S.src==="songs" || S.songs){ if (S.src==="songs") S.src = "chimes"; delete S.songs; save(); }   // "Your songs" was removed
     $("appsPanel").classList.toggle("on", S.src==="apps");
     if (S.src==="apps"){
       const sel = $("musicApp"), apps = loadMusicApps();
@@ -852,6 +851,10 @@
   const PAGES = [...document.querySelectorAll("#setup .page")].map(p=>p.dataset.page);
   function goPage(name, push){
     if (!PAGES.includes(name)) name = "main";
+    // Pages rebuilt as native Android screens open there instead
+    if (["alarm","look","morning","sound","stations"].includes(name) && NATIVE && typeof NATIVE.openSettings === "function"){
+      try { if (NATIVE.openSettings(name)) return; } catch(e){}
+    }
     if (name !== "stations" && typeof stopPreview === "function") stopPreview();
     document.querySelectorAll("#setup .page").forEach(p=>p.classList.toggle("on", p.dataset.page===name));
     $("setup").classList.toggle("sub", name !== "main");
@@ -877,7 +880,7 @@
     const paused = S.pauseUntil && S.pauseUntil >= new Date().toLocaleDateString("en-CA");
     $("sumAlarm").textContent = (paused ? "Paused · " : "") + daysText() + (S.perDay ? " (own times)" : "") + ` · sunrise ${S.dur} min · snooze ${S.snooze} min`;
     const st = curStation()[0].replace("…","");
-    const src = S.src==="radio" ? "📻 " + st : S.src==="songs" ? "♪ Your songs" :
+    const src = S.src==="radio" ? "📻 " + st : 
                 S.src==="spotify" ? ("Spotify" + (S.spAppOk && SP.parseLink(S.spLink) ? ` · ${S.spName || "your playlist"}` : " · what you last played")) :
                 S.src==="apps" ? "🎵 " + (S.appName || "Choose a music app") : "Chimes";
     $("sumSound").textContent = `${src} · fade ${S.fade} min` + (S.earlyMin && S.src!=="chimes" ? ` · starts ${S.earlyMin} min early` : "");
@@ -1075,17 +1078,8 @@
     $("status").innerHTML = parts.join("<br><br>");
   }
 
-  // ---------- Songs (stored in IndexedDB) ----------
-  const DB = new Promise(res=>{
-    try { const r = indexedDB.open("sunrise",1); r.onupgradeneeded=()=>r.result.createObjectStore("songs",{keyPath:"id",autoIncrement:true}); r.onsuccess=()=>res(r.result); r.onerror=()=>res(null); } catch(e){ res(null); }
-  });
-  async function songsAll(){ const db = await DB; if (!db) return []; return new Promise(res=>{ const q = db.transaction("songs").objectStore("songs").getAll(); q.onsuccess=()=>res(q.result||[]); q.onerror=()=>res([]); }); }
-  async function songsAdd(files){ const db = await DB; if (!db) return; const st = db.transaction("songs","readwrite").objectStore("songs"); for (const f of files) st.add({name:f.name, blob:f}); return new Promise(r=>st.transaction.oncomplete=r); }
-  async function songsClear(){ const db = await DB; if (!db) return; const st = db.transaction("songs","readwrite").objectStore("songs"); st.clear(); return new Promise(r=>st.transaction.oncomplete=r); }
-  async function paintSongs(){ const s = await songsAll(); $("songList").textContent = s.length ? s.map(x=>"♪ "+x.name.replace(/\.[^.]+$/,"")).join("\n") : "No songs added yet."; $("songList").style.whiteSpace="pre-line"; }
-  $("addSongs").onclick = () => $("songFile").click();
-  $("songFile").onchange = async e => { if (e.target.files.length){ await songsAdd([...e.target.files]); paintSongs(); toast(`Added ${e.target.files.length} song(s)`); } e.target.value=""; };
-  $("clearSongs").onclick = async () => { await songsClear(); paintSongs(); };
+  // "Your songs" was removed: free the space the browser version used for them
+  try { indexedDB.deleteDatabase("sunrise"); } catch(e){}
 
   // ---------- Spotify (through the Spotify app on this phone) ----------
   const SP = {
@@ -1136,7 +1130,7 @@
 
   // ---------- Audio engine ----------
   const player = $("player");
-  let ac = null, master = null, chimeTimer = null, ringStart = 0, using = null, songQueue = [], songUrl = null, fallbackTimer = null;
+  let ac = null, master = null, chimeTimer = null, ringStart = 0, using = null, fallbackTimer = null;
   function initAudio(){
     try {
       if (!ac){
@@ -1159,17 +1153,15 @@
   }
   function playPhrase(){ if (!ac) return; const t0 = ac.currentTime + 0.05; NOTES.forEach((f,i)=>bell(f, t0 + i*0.42, 0.5)); }
   function startChimes(){ initAudio(); if (!ac) return; using = "chimes"; holdFocus(true); clearInterval(chimeTimer); playPhrase(); chimeTimer = setInterval(playPhrase, 5200); $("rNow").textContent = ""; }
-  // Audio focus (Android app): while Sunrise plays chimes or your songs, other apps pause. Released for music apps,
+  // Audio focus (Android app): while Sunrise plays its chimes, other apps pause. Released for music apps,
   // which take focus themselves. A phone call pauses the alarm sound until it ends.
   const holdFocus = on => { try { if (NATIVE && NATIVE.audioFocus) NATIVE.audioFocus(!!on); } catch(e){} };
   let focusPaused = null;
   function onFocusEvent(ev){
     if (ev === "focus:pause"){
       if (using === "chimes"){ clearInterval(chimeTimer); chimeTimer = null; if (master && ac) master.gain.setTargetAtTime(0, ac.currentTime, 0.1); focusPaused = "chimes"; }
-      else if (using === "songs" && !player.paused){ player.pause(); focusPaused = "songs"; }
     } else if (ev === "focus:resume"){
       if (focusPaused === "chimes" && using === "chimes"){ playPhrase(); chimeTimer = setInterval(playPhrase, 5200); applyVol(curVol); }
-      else if (focusPaused === "songs" && using === "songs") player.play().catch(()=>{});
       focusPaused = null;
     }
   }
@@ -1229,7 +1221,7 @@
   }
   function resetPlayer(){ if (NATIVE_RADIO && nativeRadioOn !== null){ try { NATIVE.radioStop(); } catch(e){} nativeRadioOn = false; nativeWaiter = null; } if (hls){ try { hls.destroy(); } catch(e){} hls = null; } player.onplaying = player.onerror = null; try { player.pause(); } catch(e){} player.removeAttribute("src"); player.load(); }
   function fallBack(why){ if (mode==="morning"){ stopSound(); paintMorningMusic(); return; } if (using==="chimes") return; stopPlayer(); startChimes(); $("rNow").textContent = why; }
-  function stopPlayer(){ clearTimeout(fallbackTimer); player.onended = null; resetPlayer(); if (songUrl){ URL.revokeObjectURL(songUrl); songUrl=null; } }
+  function stopPlayer(){ clearTimeout(fallbackTimer); player.onended = null; resetPlayer(); }
   function armFallback(why){ clearTimeout(fallbackTimer); fallbackTimer = setTimeout(()=>{ if (player.paused || player.readyState<3) fallBack(why); }, 12000); }
 
   async function startRadio(){
@@ -1252,18 +1244,6 @@
     }
     if (using === "radio") fallBack(lastWhy === "blocked" ? "Radio was blocked by the browser, so playing chimes" : `${name} wouldn't play, so playing chimes`);
   }
-  async function playNextSong(){
-    if (!songQueue.length){ const all = await songsAll(); if (!all.length) return fallBack("No songs added, so playing chimes"); songQueue = all.sort(()=>Math.random()-.5); }
-    const s = songQueue.shift();
-    if (songUrl) URL.revokeObjectURL(songUrl);
-    songUrl = URL.createObjectURL(s.blob); player.src = songUrl;
-    player.onended = playNextSong;
-    player.onerror = () => playNextSong();
-    $("rNow").textContent = "♪ " + s.name.replace(/\.[^.]+$/,"");
-    try { await player.play(); } catch(e){ fallBack("Couldn't play your songs, so playing chimes"); }
-  }
-  async function startSongs(){ using = "songs"; holdFocus(true); player.volume = 0.05; songQueue = []; await playNextSong(); }
-
   const NATIVE_SP = !!(NATIVE && typeof NATIVE.spotifyWake === "function");
   let spNativeFade = false;
   const sleep = ms => new Promise(r=>setTimeout(r, ms));
@@ -1354,7 +1334,7 @@
   }
   function startSound(){
     ringStart = Date.now(); userVol = false; captureKeys(true);
-    if (S.src==="radio") startRadio(); else if (S.src==="songs") startSongs(); else if (S.src==="spotify") startSpotify();
+    if (S.src==="radio") startRadio(); else if (S.src==="spotify") startSpotify();
     else if (S.src==="apps"){ if (S.appPkg && HAS_APPS) startSimple("app", S.appPkg, S.appName || "Music app", false); else { startChimes(); $("rNow").textContent = "No music app chosen, so playing chimes"; } }
     else startChimes();
     rampVolume();
@@ -1394,7 +1374,7 @@
     if (using==="chimes"){ if (master && ac) master.gain.setTargetAtTime(v, ac.currentTime, 0.5); }
     else if ((using==="spotify" || using==="app") && spNativeFade){ try { NATIVE.musicVolume(Math.max(0.07, v)); } catch(e){} }
     else if (using==="radio" && NATIVE_RADIO){ try { NATIVE.radioVolume(v); } catch(e){} }
-    else if (using==="radio" || using==="songs") player.volume = Math.max(0, Math.min(1, v));
+    else if (using==="radio") player.volume = Math.max(0, Math.min(1, v));
   }
 
   // test button: plays 15 s at the chosen max volume
@@ -1450,7 +1430,10 @@
 
   // ---------- State machine ----------
   let mode = "setup", alarmAt = null, sunriseStart = null, snoozeUntil = null, preview = false, lastShift = 0, wxFetchedAtSunrise = false;
+  // Android app: the settings screens are native. When the page would show its own, it hands back to them.
+  const HAS_NATIVE_HOME = !!(NATIVE && typeof NATIVE.showHome === "function");
   const show = id => {
+    if (id === "setup" && HAS_NATIVE_HOME){ try { if (NATIVE.showHome()) return; } catch(e){} }
     document.querySelectorAll(".screen").forEach(s=>s.classList.toggle("on", s.id===id));
     if (id==="setup") bright(-1); else if (id==="ring" || id==="morning") bright(1);
   };
@@ -1542,11 +1525,11 @@
     cancelBackup();
   }
   let morningSince = 0;
-  const musicOn = () => ["radio","songs","spotify","app"].includes(using);
+  const musicOn = () => ["radio","spotify","app"].includes(using);
   function paintMorningMusic(){
     const on = musicOn();
     $("mMusic").style.display = on ? "" : "none";
-    if (on) $("mmName").textContent = $("rNow").textContent || (using==="radio" ? "📻 Radio" : using==="spotify" ? "🎵 Spotify" : using==="app" ? "🎵 " + (S.appName||"Music") : "♪ Your songs");
+    if (on) $("mmName").textContent = $("rNow").textContent || (using==="radio" ? "📻 Radio" : using==="spotify" ? "🎵 Spotify" : "🎵 " + (S.appName||"Music"));
   }
   function enterMorning(keepMusic){
     if (!(keepMusic && musicOn())) stopSound();
@@ -1621,7 +1604,7 @@
     nlLastTap = now;
     nlTapTimer = setTimeout(()=>nightLight(0), 360);
   });
-  const playLabel = () => ({radio:"▶ Play radio", spotify:"▶ Play Spotify", songs:"▶ Play my songs", apps:`▶ Play ${S.appName || "music"}`})[S.src] || "▶ Play chimes";
+  const playLabel = () => ({radio:"▶ Play radio", spotify:"▶ Play Spotify", apps:`▶ Play ${S.appName || "music"}`})[S.src] || "▶ Play chimes";
   function paintNightControls(){
     $("nPlay").textContent = earlyPlay && using ? "■ Stop music" : playLabel();
     $("nPlay").style.display = S.src === "chimes" ? "none" : "";
@@ -1677,6 +1660,17 @@
   applyTextSize();
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") applyTextSize(); });
 
+  // Back from a native settings screen: pick up what changed there (paint() also reschedules the alarms)
+  window.nativeSettingsChanged = () => {
+    const ns = nativeSettings(); if (!ns) return;
+    S = { ...DEF, ...ns };
+    try { localStorage.setItem("sunrise-settings", JSON.stringify(S)); } catch(e){}
+    if (mode === "setup"){ paint(); $("nextTxt").textContent = nextText(); paintTomorrow(); }
+    // e.g. "Preview the sunrise" on the native Look screen
+    let action = ""; try { action = NATIVE.takeSettingsAction ? NATIVE.takeSettingsAction() : ""; } catch(e){}
+    if (action === "preview" && mode === "setup") enterNight(true);
+  };
+
   // ---------- Updates (Android app: everything is built in, so new versions come as a new APK) ----------
   window.nativeUpdate = code => { $("updateCard").style.display = ""; $("updateBtn").dataset.v = code; };
   $("updateBtn").onclick = () => { try { NATIVE.openUpdate(); } catch(e){} };
@@ -1692,7 +1686,7 @@
   $("goodnight").onclick = () => enterNight(false);
   $("preview").onclick = () => enterNight(true);
 
-  paint(); paintSongs(); statusText(); paintTomorrow(); a11ySync();
+  paint(); statusText(); paintTomorrow(); a11ySync();
   if (!NATIVE && !("wakeLock" in navigator)) { wakeOK=false; statusText(); }
 
   // Resume overnight mode if the app was reloaded or reopened
@@ -1710,6 +1704,17 @@
   if (PAGES.includes(location.hash.slice(1))) history.replaceState(null, "", location.pathname);
   const wakeHash = location.hash.match(/^#wake(?:=(\d+))?$/);
   if (wakeHash){ history.replaceState(null, "", location.pathname); setTimeout(()=>window.nativeWake(+wakeHash[1] || 0), 300); }
+
+  // Goodnight / Preview pressed on the native home screen
+  window.nativeStart = a => {
+    if (a === "goodnight") enterNight(false); else if (a === "preview") enterNight(true);
+    if (mode === "setup") show("setup");   // e.g. no alarm set: back to the home screen
+  };
+  if (HAS_NATIVE_HOME){
+    let start = ""; try { start = NATIVE.takeStartAction ? NATIVE.takeStartAction() : ""; } catch(e){}
+    if (start) window.nativeStart(start);
+    else if (mode === "setup" && !wakeHash) show("setup");   // nothing to do here: back to the home screen
+  }
 })();
 </script>
 </body>
