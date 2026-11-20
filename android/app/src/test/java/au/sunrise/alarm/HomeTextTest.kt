@@ -45,7 +45,9 @@ class HomeTextTest {
         assertEquals("📻 triple j · fade 3 min · starts 10 min early · snooze 5 min", HomeText.sound(SoundSettings(src = "radio", station = 1, earlyMin = 10), 5))
         assertEquals("Spotify · what you last played · fade 3 min · snooze 9 min", HomeText.sound(SoundSettings(src = "spotify"), 9))
         assertEquals("🎵 Podcast Addict · fade 1 min · snooze 9 min", HomeText.sound(SoundSettings(src = "apps", appName = "Podcast Addict", fade = 1), 9))
-        assertEquals("Ocean dawn theme · clock brightness 2 of 6", HomeText.night(LookSettings(theme = "ocean")))
+        assertEquals("Ocean dawn theme", HomeText.night(LookSettings(theme = "ocean")))
+        assertEquals("Starts on the charger after 9 pm · reminder 8 h before · Ocean dawn theme",
+            HomeText.night(LookSettings(theme = "ocean"), NightSettings(autoNight = 21, bedtime = 8)))
         assertEquals("20 min · own colours · up to 80% bright", HomeText.sunrise(LookSettings(sunCustom = true, sunMax = 80), 20))
         assertEquals("Weather for Sydney · Todoist on", HomeText.morning(MorningSettings(place = "Sydney", todoToken = "x")))
     }

@@ -26,6 +26,10 @@ data class AlarmSettings(
     val skip: Long = 0,
     val once: Long = 0,
     val onceStart: Long = 0,
+    /** Your state ("VIC"), so repeating alarms don't ring on its public holidays. "" = ring on holidays. */
+    val holidayState: String = "",
+    /** That state's public holidays, ISO date → name (fetched by [Holidays]). */
+    val holidays: Map<String, String> = emptyMap(),
 ) {
     /** The time used on a given day (0 = Sunday). */
     fun timeFor(day: Int): String =
@@ -47,7 +51,22 @@ data class AlarmSettings(
             if (!at.isAfter(from)) continue
             if (skip != 0L && at.toInstant().toEpochMilli() == skip) continue
             if (pause != null && !date.isAfter(pause)) continue
+            if (holidayState.isNotEmpty() && holidays.containsKey(date.toString())) continue
             if (dow in days) return at
+        }
+        return null
+    }
+
+    /** A public holiday the repeating alarm skips before its next alarm (date, name), e.g. to say so on the home screen. */
+    fun skippedHoliday(from: ZonedDateTime): Pair<LocalDate, String>? {
+        if (holidayState.isEmpty() || days.isEmpty()) return null
+        val next = nextAlarm(from)?.toLocalDate() ?: return null
+        var d = from.toLocalDate()
+        while (d.isBefore(next)) {
+            val name = holidays[d.toString()]
+            val t = parseTime(timeFor(d.dayOfWeek.value % 7))
+            if (name != null && d.dayOfWeek.value % 7 in days && t != null && d.atTime(t).atZone(from.zone).isAfter(from)) return d to name
+            d = d.plusDays(1)
         }
         return null
     }
@@ -104,6 +123,7 @@ data class AlarmSettings(
         j.put("skip", skip)
         j.put("once", once)
         j.put("onceStart", onceStart)
+        j.put("holidayState", holidayState)
         j.remove("auto")   // alarms are always automatic now
     }
 
@@ -131,6 +151,8 @@ data class AlarmSettings(
                 skip = j.optLong("skip", 0),
                 once = j.optLong("once", 0),
                 onceStart = j.optLong("onceStart", 0),
+                holidayState = j.optString("holidayState", "").takeIf { it in Holidays.STATES } ?: "",
+                holidays = j.optJSONObject("holidayDates")?.let { o -> o.keys().asSequence().associateWith { o.optString(it) } } ?: emptyMap(),
             )
         }
 

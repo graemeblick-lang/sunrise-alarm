@@ -142,6 +142,11 @@ private fun NightView(a: AlarmFlowActivity, theme: FullTheme) {
                         "radio" -> "▶ Play radio"; "spotify" -> "▶ Play Spotify"
                         else -> "▶ Play " + a.soundSettings.appName.ifEmpty { "music" }
                     }) { a.toggleNightMusic(); a.showControls() }
+                    if (playing && a.mode == "night" && a.now < a.alarmAt - a.soundSettings.earlyMin * 60_000L) {
+                        NightButton(if (a.sleepUntil > 0) "⏲ Stops at " + timeWithAmPm(a.sleepUntil, a.is24Hour) else "⏲ Sleep timer off") {
+                            a.cycleSleepTimer()
+                        }
+                    }
                 }
                 NightButton("☀ I'm up") { a.upFromNight() }
                 NightButton("💡 Night light") { a.chooseNightLight(1) }

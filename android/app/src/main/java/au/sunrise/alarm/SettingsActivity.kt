@@ -79,7 +79,9 @@ class SettingsActivity : ComponentActivity() {
             )
             "night" -> NightScreen(
                 initial = LookSettings.from(json),
+                initialNight = NightSettings.from(json),
                 onChange = { s -> themeKey = s.theme; save { s.into(it) } },
+                onNightChange = { n -> save { n.into(it) } },
                 onBack = back,
             )
             "sunrise" -> SunriseScreen(
@@ -116,7 +118,8 @@ class SettingsActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         resumes++
-        reschedule()   // the alarm screens may have changed things (e.g. turned one alarm off)
+        reschedule()
+        Holidays.refresh(this)     // at most once a week, in the background   // the alarm screens may have changed things (e.g. turned one alarm off)
         // A music fade-in that was cut short (e.g. the phone restarted mid-alarm) left the media volume low: put it back
         if (AlarmScheduler.activeAlarm(this, 0) == 0L) runCatching { NativeAudio(this).musicRestore() }
     }

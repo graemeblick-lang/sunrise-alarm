@@ -110,6 +110,13 @@ class WakeSound(context: Context, private val mode: () -> String, private val ev
         return true
     }
 
+    /** The sleep timer: a little quieter each second, until it stops. */
+    fun fadeOutStep() {
+        if (using == null) return
+        userVol = true
+        applyVol(max(0.01f, curVol * 0.88f))
+    }
+
     private fun applyVol(v: Float) {
         curVol = v
         when {

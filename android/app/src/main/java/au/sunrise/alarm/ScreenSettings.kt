@@ -71,3 +71,34 @@ data class MorningSettings(
         fun round3(v: Double): Double = Math.round(v * 1000.0) / 1000.0
     }
 }
+
+/** Night settings beyond the look: starting the night screen by itself, the sleep timer and the bedtime reminder. */
+data class NightSettings(
+    /** On the charger after this hour (20..23), the night screen starts by itself. 0 = off. */
+    val autoNight: Int = 0,
+    /** Music started from the night screen fades out after this many minutes. 0 = keeps playing. */
+    val sleepTimer: Int = 30,
+    /** A reminder this many hours before the next alarm. 0 = off. */
+    val bedtime: Int = 0,
+) {
+    fun into(j: JSONObject) {
+        j.put("autoNight", autoNight)
+        j.put("sleepTimer", sleepTimer)
+        j.put("bedtime", bedtime)
+    }
+
+    companion object {
+        val AUTO_NIGHT_HOURS = listOf(0, 20, 21, 22, 23)
+        val SLEEP_TIMERS = listOf(0, 15, 30, 60)
+        val BEDTIME_HOURS = listOf(0, 7, 8, 9)
+
+        fun from(j: JSONObject): NightSettings {
+            val d = NightSettings()
+            return NightSettings(
+                autoNight = j.optInt("autoNight", d.autoNight).takeIf { it in AUTO_NIGHT_HOURS } ?: 0,
+                sleepTimer = j.optInt("sleepTimer", d.sleepTimer).takeIf { it in SLEEP_TIMERS } ?: d.sleepTimer,
+                bedtime = j.optInt("bedtime", d.bedtime).takeIf { it in BEDTIME_HOURS } ?: 0,
+            )
+        }
+    }
+}

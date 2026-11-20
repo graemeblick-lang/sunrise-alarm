@@ -35,6 +35,9 @@ class AlarmFlowActivity : ComponentActivity() {
     companion object {
         private const val PREFS = "flow"
         const val RING_LIMIT = 30 * 60_000L
+
+        /** True while a night is armed (the night screen is on, or should come back after a restart). */
+        fun armed(c: android.content.Context) = c.getSharedPreferences(PREFS, 0).getLong("alarmAt", 0L) > 0
     }
 
     // ----- state (Compose reads these) -----
@@ -64,6 +67,9 @@ class AlarmFlowActivity : ComponentActivity() {
         private set
     /** Bumps when the sound starts or stops, so the screen re-reads [sound]. */
     var soundChanged by mutableIntStateOf(0)
+        private set
+    /** Music started from the night screen fades out at this time (0 = no sleep timer). */
+    var sleepUntil by mutableLongStateOf(0L)
         private set
 
     lateinit var sound: WakeSound
@@ -184,7 +190,7 @@ class AlarmFlowActivity : ComponentActivity() {
             if (next == null) { toast("Pick a time first"); goHome(); return }
             alarmAt = next; sunriseStart = alarm.sunriseFor(next)
         }
-        earlyStopped = false; weatherPrefetched = false; sound.earlyPlay = false
+        earlyStopped = false; weatherPrefetched = false; sound.earlyPlay = false; sleepUntil = 0
         if (!preview) { saveArmed(); AlarmScheduler.armBackup(this, alarmAt) }
         mode = "night"
         tick()
@@ -234,9 +240,28 @@ class AlarmFlowActivity : ComponentActivity() {
 
     /** "Play" / "Stop" on the night screen (music before the alarm, by hand). */
     fun toggleNightMusic() {
-        if (sound.earlyPlay && sound.using != null) { sound.stop(); sound.earlyPlay = false; earlyStopped = true }
-        else { sound.earlyPlay = true; startSound() }
+        if (sound.earlyPlay && sound.using != null) { sound.stop(); sound.earlyPlay = false; earlyStopped = true; sleepUntil = 0 }
+        else {
+            sound.earlyPlay = true; startSound()
+            // Before the alarm's own music time, it's music to fall asleep to: the sleep timer applies
+            val m = NightSettings.from(settings).sleepTimer
+            val beforeEarly = System.currentTimeMillis() < alarmAt - soundSettings.earlyMin * 60_000L
+            sleepUntil = if (m > 0 && beforeEarly && !preview) System.currentTimeMillis() + m * 60_000L else 0L
+        }
         soundChanged++
+    }
+
+    /** The sleep timer button: 15 → 30 → 60 min → off. */
+    fun cycleSleepTimer() {
+        val left = if (sleepUntil > 0) (sleepUntil - System.currentTimeMillis()) / 60_000.0 else -1.0
+        val next = when {
+            left < 0 -> 15
+            left < 15 -> 30
+            left < 30 -> 60
+            else -> 0
+        }
+        sleepUntil = if (next > 0) System.currentTimeMillis() + next * 60_000L else 0L
+        showControls()
     }
 
     fun done() { sound.stop(); goHome() }
@@ -282,6 +307,12 @@ class AlarmFlowActivity : ComponentActivity() {
                 val s = soundSettings
                 if (!preview && s.earlyMin > 0 && s.src != "chimes" && sound.using == null && !earlyStopped &&
                     t < alarmAt && t >= alarmAt - s.earlyMin * 60_000L) { sound.earlyPlay = true; startSound() }
+                if (sleepUntil > 0) {
+                    val left = sleepUntil - t
+                    if (!(sound.earlyPlay && sound.using != null)) sleepUntil = 0
+                    else if (left <= 0) { sound.stop(); sound.earlyPlay = false; sleepUntil = 0; status = ""; soundChanged++ }
+                    else if (left < 30_000) sound.fadeOutStep()        // fade out over the last 30 seconds
+                }
                 if (sound.using != null) sound.ramp()
                 if (t >= alarmAt) enterRing()
             }

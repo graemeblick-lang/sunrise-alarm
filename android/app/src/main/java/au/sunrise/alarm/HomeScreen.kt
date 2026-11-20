@@ -210,7 +210,7 @@ fun HomeScreen(
         val look = LookSettings.from(json)
         val morning = MorningSettings.from(json)
         SectionTitle("Through the night")
-        SettingsRow("🌙", "Night", HomeText.night(look)) { onOpen("night") }
+        SettingsRow("🌙", "Night", HomeText.night(look, NightSettings.from(json))) { onOpen("night") }
         SettingsRow("🌅", "Sunrise", HomeText.sunrise(look, alarm.dur)) { onOpen("sunrise") }
         SettingsRow("🔊", "Wake-up sound", HomeText.sound(sound, alarm.snooze)) { onOpen("sound") }
         SettingsRow("☀️", "Morning", HomeText.morning(morning)) { onOpen("morning") }
