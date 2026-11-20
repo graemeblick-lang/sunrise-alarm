@@ -338,7 +338,12 @@ public class MainActivity extends Activity {
     }
 
     @Override
-    protected void onResume() { super.onResume(); try { goFullscreen(); } catch (Exception ignored) { } }
+    protected void onResume() {
+        super.onResume();
+        try { goFullscreen(); } catch (Exception ignored) { }
+        // Back from the native settings screens: the page reloads the shared settings (and reschedules)
+        if (web != null && pageLoaded) web.evaluateJavascript("window.nativeSettingsChanged && window.nativeSettingsChanged()", null);
+    }
 
     /** Shows what went wrong last time, with a button to copy it. */
     private void showReport(File crash) {
@@ -580,6 +585,19 @@ public class MainActivity extends Activity {
 
         /** True when the app has the native backup alarm (so the page can say so). */
         @JavascriptInterface public boolean hasBackupAlarm() { return true; }
+
+        // ----- settings, shared with the native settings screens (SettingsStore) -----
+        /** The shared settings JSON, or "" if the page hasn't saved any here yet. */
+        @JavascriptInterface public String getSettings() {
+            return ok() && SettingsStore.has(MainActivity.this) ? SettingsStore.read(MainActivity.this).toString() : "";
+        }
+        @JavascriptInterface public void putSettings(String json) { if (ok()) SettingsStore.write(MainActivity.this, json); }
+        /** Opens a native settings screen ("alarm"). */
+        @JavascriptInterface public boolean openSettings(String page) {
+            if (!ok() || !"alarm".equals(page)) return false;
+            runOnUiThread(() -> startActivity(new Intent(MainActivity.this, SettingsActivity.class).putExtra("page", page)));
+            return true;
+        }
 
         // ----- version and updates -----
         @JavascriptInterface public String appVersion() { return BuildConfig.VERSION_NAME; }

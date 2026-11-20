@@ -65,7 +65,8 @@ jobs:
           # Your Spotify developer app's Client ID: Settings → Secrets and variables → Actions → Variables
           SPOTIFY_CLIENT_ID: ${{ vars.SPOTIFY_CLIENT_ID }}
         # The web app is built into the APK by the copyWebApp task in android/app/build.gradle
-        run: gradle assembleRelease --no-daemon --stacktrace
+        # Unit tests (alarm schedule logic in Kotlin) run first; a failure stops the build
+        run: gradle testReleaseUnitTest assembleRelease --no-daemon --stacktrace
 
       - name: Check the web app is inside the APK
         run: |

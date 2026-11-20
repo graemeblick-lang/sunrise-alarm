@@ -47,6 +47,7 @@ For best results, tap **Fix** next to anything the Settings → Status card flag
 ## Development
 
 - `index.html` is the whole web app. `android/app/build.gradle` copies it (with `fonts.css`, `fonts/`, the manifest and icons) into the APK at build time; `LocalSite.java` serves it.
+- Settings screens are moving to native Android (Jetpack Compose, Material 3), one screen at a time. **Alarm & schedule** is native (`SettingsActivity.kt`); the rest are still in `index.html`. Both sides share one settings store (`SettingsStore.kt`, the same JSON the page uses), and the page reloads it when you come back from a native screen. The native next-alarm logic (`AlarmSettings.kt`) has unit tests matching the JavaScript ones: `gradle testReleaseUnitTest`.
 - Fonts are bundled from Fontsource (SIL Open Font License, see `fonts/`).
 - The alarm schedule logic sits between the `schedule:start` and `schedule:end` markers and is tested by `tests/schedule.test.js`:
   `TZ=Australia/Melbourne node tests/schedule.test.js`

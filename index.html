@@ -546,7 +546,16 @@
   try { localStorage.removeItem("sunrise-spotify"); } catch(e){}
   let S = { ...DEF };
   try { const s = JSON.parse(localStorage.getItem("sunrise-settings") || "null"); if (s) S = { ...DEF, ...s }; } catch(e){}
-  const save = () => { try { localStorage.setItem("sunrise-settings", JSON.stringify(S)); } catch(e){} };
+  // Android app: settings are shared with the native settings screens (SettingsStore.kt). The app's copy wins:
+  // native screens may have changed it. The page sends its whole settings object there on every save.
+  const HAS_NATIVE_SETTINGS = !!(NATIVE && typeof NATIVE.getSettings === "function");
+  const nativeSettings = () => { try { const j = HAS_NATIVE_SETTINGS ? NATIVE.getSettings() : ""; return j ? JSON.parse(j) : null; } catch(e){ return null; } };
+  const save = () => {
+    const j = JSON.stringify(S);
+    try { localStorage.setItem("sunrise-settings", j); } catch(e){}
+    if (HAS_NATIVE_SETTINGS) try { NATIVE.putSettings(j); } catch(e){}
+  };
+  { const ns = nativeSettings(); if (ns) S = { ...DEF, ...ns }; else if (HAS_NATIVE_SETTINGS) save(); }
 
   const $ = id => document.getElementById(id);
   // fetch that gives up after a while, so a bad connection can't leave things hanging at alarm time
@@ -852,6 +861,10 @@
   const PAGES = [...document.querySelectorAll("#setup .page")].map(p=>p.dataset.page);
   function goPage(name, push){
     if (!PAGES.includes(name)) name = "main";
+    // Pages rebuilt as native Android screens open there instead
+    if (name === "alarm" && NATIVE && typeof NATIVE.openSettings === "function"){
+      try { if (NATIVE.openSettings("alarm")) return; } catch(e){}
+    }
     if (name !== "stations" && typeof stopPreview === "function") stopPreview();
     document.querySelectorAll("#setup .page").forEach(p=>p.classList.toggle("on", p.dataset.page===name));
     $("setup").classList.toggle("sub", name !== "main");
@@ -1676,6 +1689,14 @@
   }
   applyTextSize();
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") applyTextSize(); });
+
+  // Back from a native settings screen: pick up what changed there (paint() also reschedules the alarms)
+  window.nativeSettingsChanged = () => {
+    const ns = nativeSettings(); if (!ns) return;
+    S = { ...DEF, ...ns };
+    try { localStorage.setItem("sunrise-settings", JSON.stringify(S)); } catch(e){}
+    if (mode === "setup"){ paint(); $("nextTxt").textContent = nextText(); }
+  };
 
   // ---------- Updates (Android app: everything is built in, so new versions come as a new APK) ----------
   window.nativeUpdate = code => { $("updateCard").style.display = ""; $("updateBtn").dataset.v = code; };
