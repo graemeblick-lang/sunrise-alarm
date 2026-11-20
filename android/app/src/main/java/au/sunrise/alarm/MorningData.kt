@@ -39,6 +39,8 @@ data class Weather(
     val todayText: String, val high: Int, val low: Int, val rainChance: Int, val rainMm: Double, val wind: Int, val uv: Int,
     /** For the night screen's "Tomorrow" line. */
     val dayEmoji: String,
+    /** Chance of rain through the day: (hour 0..23, %), every 3 hours from 6 am to 9 pm. */
+    val rainByHour: List<Pair<Int, Int>> = emptyList(),
 )
 
 object WeatherData {
@@ -55,6 +57,7 @@ object WeatherData {
 
     fun url(lat: Double, lon: Double) = "https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon" +
         "&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m" +
+        "&hourly=precipitation_probability" +
         "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,wind_speed_10m_max,uv_index_max" +
         "&timezone=auto&forecast_days=2"
 
@@ -75,7 +78,23 @@ object WeatherData {
             todayText = dtxt.lowercase(), high = num("temperature_2m_max").roundToInt(), low = num("temperature_2m_min").roundToInt(),
             rainChance = num("precipitation_probability_max").roundToInt(), rainMm = num("precipitation_sum"),
             wind = num("wind_speed_10m_max").roundToInt(), uv = num("uv_index_max").roundToInt(), dayEmoji = dem,
+            rainByHour = hourlyRain(d, days.optString(i, today.toString())),
         )
+    }
+
+    /** The chance of rain at 6 am, 9 am … 9 pm on [date] ("2026-11-23"), from Open-Meteo's hourly data. */
+    fun hourlyRain(d: JSONObject, date: String): List<Pair<Int, Int>> {
+        val h = d.optJSONObject("hourly") ?: return emptyList()
+        val times = h.optJSONArray("time") ?: return emptyList()
+        val pct = h.optJSONArray("precipitation_probability") ?: return emptyList()
+        val out = ArrayList<Pair<Int, Int>>()
+        for (k in 0 until times.length()) {
+            val t = times.optString(k)
+            if (!t.startsWith(date + "T")) continue
+            val hour = t.substring(date.length + 1).take(2).toIntOrNull() ?: continue
+            if (hour in 6..21 && hour % 3 == 0 && !pct.isNull(k)) out += hour to pct.optDouble(k).roundToInt()
+        }
+        return out
     }
 
     private const val PREFS = "weather"

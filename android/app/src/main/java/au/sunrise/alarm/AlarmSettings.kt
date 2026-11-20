@@ -7,8 +7,11 @@ import java.time.LocalTime
 import java.time.ZonedDateTime
 
 /**
- * The "Alarm & schedule" settings, read from and written into the shared settings JSON
- * (same keys and formats the web page uses).
+ * The alarm settings, read from and written into the settings JSON (same keys and formats the web page uses).
+ *
+ * Two kinds of alarm, both always automatic (the app opens itself at sunrise):
+ *  - the repeating alarm: [time] on the chosen [days] (no days = no repeating alarm);
+ *  - a one-off alarm at [once] (epoch ms), e.g. "in 5 minutes", whose sunrise starts no earlier than [onceStart].
  *
  * Days are numbered like the page: 0 = Sunday … 6 = Saturday.
  */
@@ -20,18 +23,20 @@ data class AlarmSettings(
     val dur: Int = 30,
     val snooze: Int = 9,
     val pauseUntil: String = "",
-    val auto: Boolean = true,
     val skip: Long = 0,
+    val once: Long = 0,
+    val onceStart: Long = 0,
 ) {
     /** The time used on a given day (0 = Sunday). */
     fun timeFor(day: Int): String =
         if (perDay && days.isNotEmpty()) dayTimes[day] ?: time else time
 
     /**
-     * The next alarm after [from], following the same rules as the page's nextAlarm():
-     * per-day times, the skipped alarm, the holiday pause (inclusive) and no days = one-off.
+     * The next repeating alarm after [from], following the same rules as the page's nextAlarm():
+     * per-day times, the skipped alarm and the holiday pause (inclusive). Null when no days are chosen.
      */
     fun nextAlarm(from: ZonedDateTime): ZonedDateTime? {
+        if (days.isEmpty()) return null
         val pause = runCatching { if (pauseUntil.isEmpty()) null else LocalDate.parse(pauseUntil) }.getOrNull()
         val startDay = from.toLocalDate()
         for (d in 0..400) {
@@ -42,27 +47,46 @@ data class AlarmSettings(
             if (!at.isAfter(from)) continue
             if (skip != 0L && at.toInstant().toEpochMilli() == skip) continue
             if (pause != null && !date.isAfter(pause)) continue
-            if (days.isEmpty() || dow in days) return at
+            if (dow in days) return at
         }
         return null
     }
 
+    /** The one-off alarm, if it's still to come (and wasn't skipped). */
+    fun onceAt(from: ZonedDateTime): ZonedDateTime? =
+        once.takeIf { it > from.toInstant().toEpochMilli() && it != skip }
+            ?.let { java.time.Instant.ofEpochMilli(it).atZone(from.zone) }
+
+    /** Whichever comes first: the one-off alarm or the next repeating one. */
+    fun upcoming(from: ZonedDateTime): ZonedDateTime? {
+        val a = nextAlarm(from)
+        val o = onceAt(from)
+        return if (a == null) o else if (o == null || a.isBefore(o)) a else o
+    }
+
+    /** When the sunrise starts for the alarm at [alarmMs]: the sunrise length before it (shorter for a quick one-off). */
+    fun sunriseFor(alarmMs: Long): Long {
+        val full = alarmMs - dur * 60_000L
+        return if (once > 0 && alarmMs == once) maxOf(full, minOf(onceStart, alarmMs)) else full
+    }
+
+    /** A one-off alarm at [alarmMs], set at [nowMs] (so a quick alarm's sunrise starts straight away). */
+    fun withOnce(alarmMs: Long, nowMs: Long): AlarmSettings = copy(once = alarmMs, onceStart = nowMs, skip = if (skip == alarmMs) 0 else skip)
+
     /**
      * The next [count] alarms as (sunrise start, alarm) epoch ms, like the page's alarmPlan(): what Android keeps
-     * scheduled by itself. Empty if "Wake me automatically" is off.
+     * scheduled by itself. The one-off alarm is included in time order.
      */
     fun plan(from: ZonedDateTime, count: Int = 8): List<Pair<Long, Long>> {
-        if (!auto) return emptyList()
-        val out = ArrayList<Pair<Long, Long>>()
+        val alarms = ArrayList<Long>()
+        onceAt(from)?.let { alarms += it.toInstant().toEpochMilli() }
         var t = from
-        while (out.size < count) {
+        while (alarms.size < count + 1) {
             val a = nextAlarm(t) ?: break
-            val ms = a.toInstant().toEpochMilli()
-            out += (ms - dur * 60_000L) to ms
-            if (days.isEmpty()) break                 // one-off alarm
+            alarms += a.toInstant().toEpochMilli()
             t = a.plusSeconds(1)
         }
-        return out
+        return alarms.distinct().sorted().take(count).map { sunriseFor(it) to it }
     }
 
     /** The plan as the JSON the alarm scheduler takes: [[sunriseMs, alarmMs], ...]. */
@@ -77,12 +101,17 @@ data class AlarmSettings(
         j.put("dur", dur)
         j.put("snooze", snooze)
         j.put("pauseUntil", pauseUntil)
-        j.put("auto", auto)
+        j.put("skip", skip)
+        j.put("once", once)
+        j.put("onceStart", onceStart)
+        j.remove("auto")   // alarms are always automatic now
     }
 
     companion object {
         val SUNRISE_LENGTHS = listOf(15, 20, 30, 45)
         val SNOOZE_LENGTHS = listOf(5, 9, 15)
+        /** The quick one-off alarms on the home screen, in minutes from now. */
+        val QUICK = listOf(5, 10, 20, 30)
 
         fun from(j: JSONObject): AlarmSettings {
             val d = AlarmSettings()
@@ -99,8 +128,9 @@ data class AlarmSettings(
                 dur = j.optInt("dur", d.dur),
                 snooze = j.optInt("snooze", d.snooze),
                 pauseUntil = j.optString("pauseUntil", ""),
-                auto = j.optBoolean("auto", d.auto),
                 skip = j.optLong("skip", 0),
+                once = j.optLong("once", 0),
+                onceStart = j.optLong("onceStart", 0),
             )
         }
 

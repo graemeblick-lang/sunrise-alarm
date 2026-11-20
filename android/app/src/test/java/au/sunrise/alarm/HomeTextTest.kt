@@ -17,16 +17,15 @@ class HomeTextTest {
         p.forEach { (s, a) -> assertEquals(20 * 60_000L, a - s) }
     }
 
-    @Test fun planOneOffAndOff() {
-        assertEquals(1, AlarmSettings(days = emptySet()).plan(at(2026, 11, 23, 7)).size)
-        assertEquals(0, AlarmSettings(auto = false).plan(at(2026, 11, 23, 7)).size)
+    @Test fun planNoDays() {
+        assertEquals(0, AlarmSettings(days = emptySet()).plan(at(2026, 11, 23, 7)).size)
         assertEquals(8, AlarmSettings().plan(at(2026, 11, 23, 7)).size)
     }
 
     @Test fun planJsonIsWhatTheSchedulerTakes() {
         val j = JSONArray(AlarmSettings().planJson(at(2026, 11, 23, 7)))
         assertEquals(8, j.length()); assertEquals(2, j.getJSONArray(0).length())
-        assertEquals("[]", AlarmSettings(auto = false).planJson(at(2026, 11, 23, 7)))
+        assertEquals("[]", AlarmSettings(days = emptySet()).planJson(at(2026, 11, 23, 7)))
     }
 
     @Test fun nextAlarmWords() {
@@ -35,18 +34,19 @@ class HomeTextTest {
         assertEquals("Alarm Mon at 6:30 am · in 57h 30m", HomeText.next(AlarmSettings(), at(2026, 11, 27, 21), false))
         assertEquals("Paused until Thu 26 Nov · Alarm Fri at 6:30 am · in 95h 30m",
             HomeText.next(AlarmSettings(pauseUntil = "2026-11-26"), at(2026, 11, 23, 7), false))
-        assertEquals("One-off · Alarm tomorrow at 6:30 am · in 23h 30m", HomeText.next(AlarmSettings(days = emptySet()), at(2026, 11, 23, 7), false))
+        assertEquals("Repeat is off: choose days below", HomeText.next(AlarmSettings(days = emptySet()), at(2026, 11, 23, 7), false))
+        val now = at(2026, 11, 23, 19, 0); val nowMs = now.toInstant().toEpochMilli()
+        assertEquals("One-off alarm today at 7:05 pm · in 5 min", HomeText.once(AlarmSettings().withOnce(nowMs + 5 * 60_000, nowMs), now, false))
+        assertEquals("", HomeText.once(AlarmSettings(), now, false))
     }
 
     @Test fun summaries() {
-        assertEquals("Weekdays · sunrise 30 min · snooze 9 min", HomeText.alarm(AlarmSettings(), at(2026, 11, 23).toLocalDate()))
-        assertEquals("Paused · Mon, Wed (own times) · sunrise 20 min · snooze 5 min",
-            HomeText.alarm(AlarmSettings(days = setOf(3, 1), perDay = true, dur = 20, snooze = 5, pauseUntil = "2026-12-01"), at(2026, 11, 23).toLocalDate()))
-        assertEquals("Chimes · fade 3 min", HomeText.sound(SoundSettings()))
-        assertEquals("📻 triple j · fade 3 min · starts 10 min early", HomeText.sound(SoundSettings(src = "radio", station = 1, earlyMin = 10)))
-        assertEquals("Spotify · what you last played · fade 3 min", HomeText.sound(SoundSettings(src = "spotify")))
-        assertEquals("🎵 Podcast Addict · fade 1 min", HomeText.sound(SoundSettings(src = "apps", appName = "Podcast Addict", fade = 1)))
-        assertEquals("Ocean dawn theme · own sunrise colours · 80%", HomeText.look(LookSettings(theme = "ocean", sunCustom = true, sunMax = 80)))
+        assertEquals("Chimes · fade 3 min · snooze 9 min", HomeText.sound(SoundSettings(), 9))
+        assertEquals("📻 triple j · fade 3 min · starts 10 min early · snooze 5 min", HomeText.sound(SoundSettings(src = "radio", station = 1, earlyMin = 10), 5))
+        assertEquals("Spotify · what you last played · fade 3 min · snooze 9 min", HomeText.sound(SoundSettings(src = "spotify"), 9))
+        assertEquals("🎵 Podcast Addict · fade 1 min · snooze 9 min", HomeText.sound(SoundSettings(src = "apps", appName = "Podcast Addict", fade = 1), 9))
+        assertEquals("Ocean dawn theme · clock brightness 2 of 6", HomeText.night(LookSettings(theme = "ocean")))
+        assertEquals("20 min · own colours · up to 80% bright", HomeText.sunrise(LookSettings(sunCustom = true, sunMax = 80), 20))
         assertEquals("Weather for Sydney · Todoist on", HomeText.morning(MorningSettings(place = "Sydney", todoToken = "x")))
     }
 }

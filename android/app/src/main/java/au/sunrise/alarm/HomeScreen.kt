@@ -4,6 +4,14 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -40,10 +48,11 @@ import java.time.LocalTime
 import java.time.ZonedDateTime
 
 /**
- * The native home screen (the app's main settings list): alarm time, next alarm, Goodnight and Preview,
- * the four settings screens with a summary of each, phone checks with Fix buttons, version and updates.
+ * The home screen: the alarm card (time, days, skip, pause), quick one-off alarms, Goodnight and Preview,
+ * the settings in the order the night goes (Night, Sunrise, Wake-up sound, Morning), phone checks, updates.
  * [refresh] changes whenever the app comes back to the front, so everything is re-read.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     refresh: Int,
@@ -69,6 +78,8 @@ fun HomeScreen(
     LaunchedEffect(Unit) { UpdateCheck.check(context, false) { code -> main.post { newVersion = code } } }
 
     var editingTime by remember { mutableStateOf(false) }
+    var pickingOnce by remember { mutableStateOf(false) }
+    var pickingPause by remember { mutableStateOf(false) }
     // A crash saved last time (App.java): offer to copy it, then forget it
     val crashFile = remember { java.io.File(context.filesDir, App.CRASH_FILE) }
     var crash by remember(refresh) { mutableStateOf(if (crashFile.exists()) runCatching { crashFile.readText() }.getOrNull() else null) }
@@ -94,37 +105,76 @@ fun HomeScreen(
             }
         }
 
-        // ----- the alarm -----
+        // ----- the alarm: time, days, skip and pause, all on one card -----
+        val nowMs = now.toInstant().toEpochMilli()
+        val next = alarm.nextAlarm(now)
+        val paused = pauseDate(alarm.pauseUntil)?.takeIf { !it.isBefore(now.toLocalDate()) }
+        val onCard = MaterialTheme.colorScheme.onPrimaryContainer
         Surface(
             color = MaterialTheme.colorScheme.primaryContainer,
             shape = MaterialTheme.shapes.extraLarge,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
-                .clickableRow(if (alarm.perDay) "change each day's time" else "change the alarm time") {
-                    if (alarm.perDay) onOpen("alarm") else editingTime = true
-                },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         ) {
-            Column(Modifier.padding(horizontal = 24.dp, vertical = 20.dp)) {
-                val next = alarm.nextAlarm(now)
+            Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 8.dp)) {
+                Text("Alarm", style = MaterialTheme.typography.labelLarge, color = onCard)
                 val bigTime = if (alarm.perDay && next != null) AlarmSettings.formatTime(next.toLocalTime()) else alarm.time
                 Text(
                     HomeText.time(bigTime, is24Hour),
                     style = MaterialTheme.typography.displayLarge,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    color = if (alarm.days.isEmpty() || paused != null) onCard.copy(alpha = 0.55f) else onCard,
+                    modifier = Modifier.clickableRow(if (alarm.perDay) "change each day's time" else "change the alarm time") {
+                        if (alarm.perDay) onOpen("alarm") else editingTime = true
+                    },
                 )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    HomeText.next(alarm, now, is24Hour).ifEmpty { "No alarm set" },
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
+                Text(HomeText.next(alarm, now, is24Hour), style = MaterialTheme.typography.bodyLarge, color = onCard)
+                Spacer(Modifier.height(12.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    WEEK_ORDER.forEach { day ->
+                        val on = day in alarm.days
+                        FilterChip(
+                            selected = on,
+                            onClick = { update(alarm.copy(days = if (on) alarm.days - day else alarm.days + day)) },
+                            label = { Text(DAY_LETTERS[day], modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center) },
+                            modifier = Modifier.weight(1f).semantics { contentDescription = DAY_NAMES[day] },
+                        )
+                    }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    when {
+                        alarm.skip > nowMs && alarm.skip != alarm.once -> TextButton(onClick = { update(alarm.copy(skip = 0)) }) { Text("Undo skip") }
+                        next != null -> TextButton(onClick = { update(alarm.copy(skip = next.toInstant().toEpochMilli())) }) { Text("Skip next") }
+                    }
+                    if (paused != null) TextButton(onClick = { update(alarm.copy(pauseUntil = "")) }) { Text("Resume") }
+                    else if (alarm.days.isNotEmpty()) TextButton(onClick = { pickingPause = true }) { Text("Pause…") }
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = { onOpen("alarm") }) { Text("Schedule") }
+                }
             }
         }
-        SwitchRow(
-            title = "Wake me automatically",
-            subtitle = "The app opens itself and starts the sunrise, even if the screen was off. No need to tap Goodnight.",
-            checked = alarm.auto,
-            onCheckedChange = { update(alarm.copy(auto = it)) },
-        )
+
+        // ----- a one-off alarm, e.g. in 5 minutes -----
+        SectionTitle("Quick alarm")
+        val onceText = HomeText.once(alarm, now, is24Hour)
+        if (onceText.isNotEmpty()) {
+            ListItem(
+                headlineContent = { Text(onceText) },
+                trailingContent = { TextButton(onClick = { update(alarm.copy(once = 0, onceStart = 0)) }) { Text("Cancel") } },
+            )
+        }
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            AlarmSettings.QUICK.forEach { m ->
+                AssistChip(
+                    onClick = { val t = System.currentTimeMillis(); update(alarm.withOnce(t + m * 60_000L, t)); now = ZonedDateTime.now() },
+                    label = { Text("$m min") },
+                    modifier = Modifier.semantics { contentDescription = "One-off alarm in $m minutes" },
+                )
+            }
+            AssistChip(onClick = { pickingOnce = true }, label = { Text("Pick a time…") })
+        }
+        Hint("Rings once. For a short one the sunrise starts straight away.")
 
         // ----- a new version -----
         if (newVersion > 0) {
@@ -155,15 +205,15 @@ fun HomeScreen(
             }
         }
 
-        // ----- settings -----
+        // ----- settings, in the order the night goes -----
         val sound = SoundSettings.from(json)
         val look = LookSettings.from(json)
         val morning = MorningSettings.from(json)
-        SectionTitle("Settings")
-        SettingsRow("⏰", "Alarm & schedule", HomeText.alarm(alarm, now.toLocalDate())) { onOpen("alarm") }
-        SettingsRow("🔊", "Wake-up sound", HomeText.sound(sound)) { onOpen("sound") }
-        SettingsRow("🎨", "Look & brightness", HomeText.look(look)) { onOpen("look") }
-        SettingsRow("☀️", "Morning screen", HomeText.morning(morning)) { onOpen("morning") }
+        SectionTitle("Through the night")
+        SettingsRow("🌙", "Night", HomeText.night(look)) { onOpen("night") }
+        SettingsRow("🌅", "Sunrise", HomeText.sunrise(look, alarm.dur)) { onOpen("sunrise") }
+        SettingsRow("🔊", "Wake-up sound", HomeText.sound(sound, alarm.snooze)) { onOpen("sound") }
+        SettingsRow("☀️", "Morning", HomeText.morning(morning)) { onOpen("morning") }
 
         // ----- phone check -----
         SectionTitle("Phone check")
@@ -201,6 +251,30 @@ fun HomeScreen(
             is24Hour = is24Hour,
             onDismiss = { editingTime = false },
             onConfirm = { t -> update(alarm.copy(time = AlarmSettings.formatTime(t))); editingTime = false },
+        )
+    }
+
+    if (pickingOnce) {
+        TimeDialog(
+            title = "One-off alarm",
+            initial = LocalTime.now().plusMinutes(60).withSecond(0).withNano(0),
+            is24Hour = is24Hour,
+            onDismiss = { pickingOnce = false },
+            onConfirm = { t ->
+                val n = ZonedDateTime.now()
+                var at = n.toLocalDate().atTime(t).atZone(n.zone)
+                if (!at.isAfter(n)) at = at.plusDays(1)
+                update(alarm.withOnce(at.toInstant().toEpochMilli(), System.currentTimeMillis()))
+                pickingOnce = false
+            },
+        )
+    }
+
+    if (pickingPause) {
+        PauseDialog(
+            initial = pauseDate(alarm.pauseUntil),
+            onDismiss = { pickingPause = false },
+            onConfirm = { d -> update(alarm.copy(pauseUntil = d.toString())); pickingPause = false },
         )
     }
 }

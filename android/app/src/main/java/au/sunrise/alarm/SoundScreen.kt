@@ -51,7 +51,11 @@ private val SPOTIFY_ERRORS = mapOf(
 )
 
 @Composable
-fun SoundScreen(s: SoundSettings, update: (SoundSettings) -> Unit, spotifyClientId: String, onFindStations: () -> Unit, onBack: () -> Unit) {
+fun SoundScreen(
+    s: SoundSettings, update: (SoundSettings) -> Unit, snooze: Int, onSnooze: (Int) -> Unit,
+    spotifyClientId: String, onFindStations: () -> Unit, onBack: () -> Unit,
+) {
+    var snoozeLen by remember { mutableStateOf(snooze) }
     val context = LocalContext.current
     // Callbacks that arrive later (Spotify) must change the latest settings, not the ones from when they started
     val latest by rememberUpdatedState(s)
@@ -213,6 +217,9 @@ fun SoundScreen(s: SoundSettings, update: (SoundSettings) -> Unit, spotifyClient
             }
             Hint("Music started before alarm time (automatically, or by tapping the screen) fades in to this volume and stays there. At alarm time it rises to your maximum volume.")
         }
+
+        SectionTitle("Snooze")
+        Choice(AlarmSettings.SNOOZE_LENGTHS, snoozeLen, { "$it min" }) { snoozeLen = it; onSnooze(it) }
     }
 }
 

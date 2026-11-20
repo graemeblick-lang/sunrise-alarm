@@ -16,6 +16,8 @@
 
     <queries>
         <package android:name="com.spotify.music" />
+        <!-- The BOM Weather app, opened from the morning screen -->
+        <package android:name="au.gov.bom.metview" />
         <intent>
             <action android:name="android.intent.action.MEDIA_BUTTON" />
         </intent>
@@ -35,17 +37,6 @@
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:usesCleartextTraffic="true"
         android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
-
-        <!-- The web version of the night, alarm and morning screens. No longer opened (replaced by AlarmFlowActivity). -->
-        <activity
-            android:name=".MainActivity"
-            android:exported="false"
-            android:launchMode="singleTask"
-            android:showWhenLocked="true"
-            android:turnScreenOn="true"
-            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
-            android:screenOrientation="unspecified">
-        </activity>
 
         <!-- The night, alarm and morning screens. Shows over the lock screen; opened by the app itself. -->
         <activity

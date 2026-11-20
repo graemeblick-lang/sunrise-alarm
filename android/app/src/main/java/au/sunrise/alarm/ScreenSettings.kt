@@ -37,19 +37,21 @@ data class LookSettings(
     }
 }
 
-/** "Morning screen" settings: where the weather is for, and the optional links. */
+/** Morning settings: where the weather is for, the optional weather page link and the Todoist token. */
 data class MorningSettings(
     val lat: Double = -37.814,
     val lon: Double = 144.963,
     val place: String = "Melbourne",
-    val willy: String = "",
+    /** Your BOM (or WillyWeather) page, opened from the morning screen. Empty = the BOM app, or bom.gov.au. */
+    val weatherLink: String = "",
     val todoToken: String = "",
 ) {
     fun into(j: JSONObject) {
         j.put("lat", lat)
         j.put("lon", lon)
         j.put("place", place)
-        j.put("willy", willy)
+        j.put("weatherLink", weatherLink)
+        j.remove("willy")
         j.put("todoToken", todoToken)
     }
 
@@ -60,10 +62,21 @@ data class MorningSettings(
                 lat = j.optDouble("lat", d.lat).takeIf { !it.isNaN() } ?: d.lat,
                 lon = j.optDouble("lon", d.lon).takeIf { !it.isNaN() } ?: d.lon,
                 place = j.optString("place", d.place).ifEmpty { d.place },
-                willy = j.optString("willy", ""),
+                weatherLink = j.optString("weatherLink", j.optString("willy", "")),
                 todoToken = j.optString("todoToken", ""),
             )
         }
+
+        const val BOM_APP = "au.gov.bom.metview"
+        const val BOM_SITE = "https://www.bom.gov.au/"
+
+        /** Only BOM and WillyWeather pages are opened from the morning screen. */
+        fun linkOk(url: String): Boolean =
+            Regex("^https://(www\\.)?(bom\\.gov\\.au|willyweather\\.com\\.au)(/|$)").containsMatchIn(url)
+
+        /** The morning screen's button. */
+        fun linkLabel(url: String): String =
+            if (linkOk(url) && url.contains("willyweather")) "Open WillyWeather ↗" else "Open BOM forecast ↗"
 
         /** Rounded to 3 decimals (about 100 m), as the page does: no more precise than the weather needs. */
         fun round3(v: Double): Double = Math.round(v * 1000.0) / 1000.0

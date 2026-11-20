@@ -20,17 +20,16 @@ import org.json.JSONObject
 import java.time.ZonedDateTime
 
 /**
- * The app's native screens (Jetpack Compose, Material 3). The app opens here, on the home screen.
- * The web page only runs for the night, alarm and morning screens: Goodnight and Preview hand over to it,
- * and it hands back here when it's done.
+ * The app's home and settings screens (Jetpack Compose, Material 3). The app opens here, on the home screen.
+ * Goodnight and Preview open the night screen (AlarmFlowActivity), which comes back here when it's done.
  *
- * Screens: "home", "alarm" (Alarm & schedule), "look" (Look & brightness), "morning" (Morning screen),
- * "sound" (Wake-up sound) and "stations" (Find stations).
+ * Screens, in the order the night goes: "home", "alarm" (Schedule), "night", "sunrise", "sound" (Wake-up sound,
+ * with "stations", Find stations) and "morning".
  * Every change is saved into the shared settings and the alarms are rescheduled straight away.
  */
 class SettingsActivity : ComponentActivity() {
     companion object {
-        val PAGES = setOf("home", "alarm", "look", "morning", "sound", "stations")
+        val PAGES = setOf("home", "alarm", "night", "sunrise", "morning", "sound", "stations")
         /** Something the page should do when you come back (e.g. "preview" the sunrise). */
         const val PREF_ACTION = "settingsAction"
     }
@@ -78,9 +77,16 @@ class SettingsActivity : ComponentActivity() {
                 onOpen = { route = it },
                 onStart = { action -> startNight(action) },
             )
-            "look" -> LookScreen(
+            "night" -> NightScreen(
                 initial = LookSettings.from(json),
                 onChange = { s -> themeKey = s.theme; save { s.into(it) } },
+                onBack = back,
+            )
+            "sunrise" -> SunriseScreen(
+                initial = LookSettings.from(json),
+                dur = AlarmSettings.from(json).dur,
+                onChange = { s -> save { s.into(it) } },
+                onDur = { d -> save { it.put("dur", d) } },
                 onPreview = { if (single) requestAction("preview") else startNight("preview") },
                 onBack = back,
             )
@@ -88,6 +94,8 @@ class SettingsActivity : ComponentActivity() {
                 startOnStations = r == "stations",
                 initial = SoundSettings.from(json),
                 save = { s -> save { s.into(it) } },
+                snooze = AlarmSettings.from(json).snooze,
+                onSnooze = { v -> save { it.put("snooze", v) } },
                 spotifyClientId = BuildConfig.SPOTIFY_CLIENT_ID.ifEmpty { json.optString("spClient", "") },
                 onClose = back,
             )
@@ -173,7 +181,10 @@ class SettingsActivity : ComponentActivity() {
 
 /** Wake-up sound and Find stations share one copy of the settings, so a station you add shows up straight away. */
 @Composable
-fun SoundFlow(startOnStations: Boolean, initial: SoundSettings, save: (SoundSettings) -> Unit, spotifyClientId: String, onClose: () -> Unit) {
+fun SoundFlow(
+    startOnStations: Boolean, initial: SoundSettings, save: (SoundSettings) -> Unit,
+    snooze: Int, onSnooze: (Int) -> Unit, spotifyClientId: String, onClose: () -> Unit,
+) {
     var s by remember { mutableStateOf(initial) }
     val update: (SoundSettings) -> Unit = { n -> s = n; save(n) }
     var onStations by rememberSaveable { mutableStateOf(startOnStations) }
@@ -182,6 +193,6 @@ fun SoundFlow(startOnStations: Boolean, initial: SoundSettings, save: (SoundSett
     if (onStations) {
         StationsScreen(s, update, onBack = { if (startOnStations) onClose() else onStations = false })
     } else {
-        SoundScreen(s, update, spotifyClientId, onFindStations = { onStations = true }, onBack = onClose)
+        SoundScreen(s, update, snooze, onSnooze, spotifyClientId, onFindStations = { onStations = true }, onBack = onClose)
     }
 }

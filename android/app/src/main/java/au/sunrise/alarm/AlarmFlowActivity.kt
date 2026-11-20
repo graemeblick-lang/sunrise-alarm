@@ -149,7 +149,7 @@ class AlarmFlowActivity : ComponentActivity() {
         if (ms > 0 && t >= ms && t < ms + RING_LIMIT) {
             if (mode == "ring" || mode == "snooze") return
             sound.stop()
-            preview = false; alarmAt = ms; sunriseStart = ms - a.dur * 60_000L
+            preview = false; alarmAt = ms; sunriseStart = a.sunriseFor(ms)
             saveArmed(); enterRing(); return
         }
         if (mode.isEmpty() || mode == "morning") enterNight(false, ms)
@@ -180,9 +180,9 @@ class AlarmFlowActivity : ComponentActivity() {
         val t = System.currentTimeMillis()
         if (preview) { alarmAt = t + 60_000; sunriseStart = t + 2_000 }
         else {
-            val next = if (targetMs > t) targetMs else alarm.nextAlarm(ZonedDateTime.now())?.toInstant()?.toEpochMilli()
+            val next = if (targetMs > t) targetMs else alarm.upcoming(ZonedDateTime.now())?.toInstant()?.toEpochMilli()
             if (next == null) { toast("Pick a time first"); goHome(); return }
-            alarmAt = next; sunriseStart = next - alarm.dur * 60_000L
+            alarmAt = next; sunriseStart = alarm.sunriseFor(next)
         }
         earlyStopped = false; weatherPrefetched = false; sound.earlyPlay = false
         if (!preview) { saveArmed(); AlarmScheduler.armBackup(this, alarmAt) }
@@ -228,7 +228,7 @@ class AlarmFlowActivity : ComponentActivity() {
     fun turnOff() {
         nightLight = 0; disarm(); sound.stop()
         if (!preview && alarmAt > 0) skip(alarmAt)
-        toast(if (alarm.days.isNotEmpty()) "This alarm is off. Repeats stay on." else "Alarm off")
+        toast(if (alarm.days.isNotEmpty() && alarmAt != alarm.once) "This alarm is off. Repeats stay on." else "Alarm off")
         goHome()
     }
 
@@ -292,7 +292,7 @@ class AlarmFlowActivity : ComponentActivity() {
             "snooze" -> if (t >= snoozeUntil) enterRing()
             "morning" -> if (!sound.musicOn && t - morningSince > 30 * 60_000L) {
                 // Back to the night clock for the next alarm (or home if there isn't one)
-                if (alarm.nextAlarm(ZonedDateTime.now()) != null) enterNight(false) else goHome()
+                if (alarm.upcoming(ZonedDateTime.now()) != null) enterNight(false) else goHome()
             }
         }
     }
@@ -325,7 +325,7 @@ class AlarmFlowActivity : ComponentActivity() {
     /** Not armed any more. If this alarm's sunrise had started, remember it was dealt with (so a late wake is ignored). */
     private fun disarm() {
         getSharedPreferences(PREFS, 0).edit().clear().apply()
-        if (!preview && alarmAt > 0 && System.currentTimeMillis() >= alarmAt - alarm.dur * 60_000L) {
+        if (!preview && alarmAt > 0 && System.currentTimeMillis() >= alarm.sunriseFor(alarmAt)) {
             SettingsStore.update(this) { it.put("handled", alarmAt) }
         }
         AlarmScheduler.cancelBackup(this)

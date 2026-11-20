@@ -29,10 +29,23 @@ class ScreenSettingsTest {
 
     @Test fun morningRoundTrip() {
         val j = JSONObject("""{"theme":"phone"}""")
-        MorningSettings(lat = -33.869, lon = 151.209, place = "Sydney", willy = "https://x", todoToken = "abc").into(j)
+        MorningSettings(lat = -33.869, lon = 151.209, place = "Sydney", weatherLink = "https://x", todoToken = "abc").into(j)
         val s = MorningSettings.from(j)
         assertEquals("Sydney", s.place); assertEquals(151.209, s.lon, 0.0); assertEquals("abc", s.todoToken)
         assertEquals("phone", j.getString("theme"))
+    }
+
+    @Test fun oldWillyWeatherLinkIsKept() =
+        assertEquals("https://www.willyweather.com.au/vic/x.html", MorningSettings.from(JSONObject("""{"willy":"https://www.willyweather.com.au/vic/x.html"}""")).weatherLink)
+
+    @Test fun weatherLinks() {
+        assertEquals(true, MorningSettings.linkOk("https://www.bom.gov.au/places/vic/melbourne/"))
+        assertEquals(true, MorningSettings.linkOk("https://bom.gov.au"))
+        assertEquals(true, MorningSettings.linkOk("https://www.willyweather.com.au/vic/x.html"))
+        assertEquals(false, MorningSettings.linkOk("https://www.bom.gov.au.evil.com/"))
+        assertEquals(false, MorningSettings.linkOk("http://www.bom.gov.au/"))
+        assertEquals("Open BOM forecast ↗", MorningSettings.linkLabel(""))
+        assertEquals("Open WillyWeather ↗", MorningSettings.linkLabel("https://www.willyweather.com.au/vic/x.html"))
     }
 
     @Test fun roundsToThreeDecimals() = assertEquals(-37.815, MorningSettings.round3(-37.81462), 0.0)

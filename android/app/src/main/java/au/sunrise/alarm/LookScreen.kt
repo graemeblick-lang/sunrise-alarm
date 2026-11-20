@@ -44,13 +44,13 @@ import androidx.compose.ui.unit.dp
 
 private val SUN_COLOUR_NAMES = listOf("Dawn", "Glow", "Daylight")
 
+/** 🌙 Night: the colour theme and the overnight clock. */
 @Composable
-fun LookScreen(initial: LookSettings, onChange: (LookSettings) -> Unit, onPreview: () -> Unit, onBack: () -> Unit) {
+fun NightScreen(initial: LookSettings, onChange: (LookSettings) -> Unit, onBack: () -> Unit) {
     var s by remember { mutableStateOf(initial) }
     fun update(n: LookSettings) { s = n; onChange(n) }
-    var editingColour by remember { mutableStateOf<Int?>(null) }
 
-    SettingsScaffold("Look & brightness", onBack) {
+    SettingsScaffold("Night", onBack) {
         SectionTitle("Colour theme")
         Column(Modifier.selectableGroup()) {
             val themes = buildList<Triple<String, String, String?>> {
@@ -69,7 +69,39 @@ fun LookScreen(initial: LookSettings, onChange: (LookSettings) -> Unit, onPrevie
             }
         }
 
-        SectionTitle("Sunrise colours")
+        SectionTitle("Overnight clock brightness")
+        LabelledSlider(
+            value = s.dim.toFloat(), range = 1f..6f, steps = 4,
+            valueText = "${s.dim} of 6", description = "Overnight clock brightness",
+        ) { update(s.copy(dim = it.toInt())) }
+
+        Hint("The clock stays this dim until the sunrise starts.")
+    }
+}
+
+/** 🌅 Sunrise: how long it takes, its colours and how bright it gets. */
+@Composable
+fun SunriseScreen(
+    initial: LookSettings, dur: Int,
+    onChange: (LookSettings) -> Unit, onDur: (Int) -> Unit, onPreview: () -> Unit, onBack: () -> Unit,
+) {
+    var s by remember { mutableStateOf(initial) }
+    fun update(n: LookSettings) { s = n; onChange(n) }
+    var length by remember { mutableStateOf(dur) }
+    var editingColour by remember { mutableStateOf<Int?>(null) }
+
+    SettingsScaffold("Sunrise", onBack) {
+        SectionTitle("Starts before the alarm")
+        Choice(AlarmSettings.SUNRISE_LENGTHS, length, { "$it min" }) { length = it; onDur(it) }
+
+        SectionTitle("Brightness")
+        LabelledSlider(
+            value = s.sunMax.toFloat(), range = 15f..100f, steps = 0,
+            valueText = "${s.sunMax}%", description = "Sunrise brightness",
+        ) { update(s.copy(sunMax = it.toInt())) }
+        Hint("How bright the screen gets by alarm time. It stays dim for most of the sunrise and brightens towards the end.")
+
+        SectionTitle("Colours")
         SwitchRow(
             title = "Choose my own",
             subtitle = if (s.sunCustom) null else "Using the colour theme's sunrise",
@@ -111,19 +143,6 @@ fun LookScreen(initial: LookSettings, onChange: (LookSettings) -> Unit, onPrevie
         Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             FilledTonalButton(onClick = onPreview) { Text("Preview the sunrise (1 minute)") }
         }
-
-        SectionTitle("Overnight clock brightness")
-        LabelledSlider(
-            value = s.dim.toFloat(), range = 1f..6f, steps = 4,
-            valueText = "${s.dim} of 6", description = "Overnight clock brightness",
-        ) { update(s.copy(dim = it.toInt())) }
-
-        SectionTitle("Sunrise brightness")
-        LabelledSlider(
-            value = s.sunMax.toFloat(), range = 15f..100f, steps = 0,
-            valueText = "${s.sunMax}%", description = "Sunrise brightness",
-        ) { update(s.copy(sunMax = it.toInt())) }
-        Hint("How bright the screen gets by alarm time. It stays dim for most of the sunrise and brightens towards the end.")
     }
 
     editingColour?.let { i ->
