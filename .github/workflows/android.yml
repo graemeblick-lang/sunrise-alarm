@@ -79,6 +79,27 @@ jobs:
           path: android/app/build/outputs/apk/release/app-release.apk
           retention-days: 7
 
+      - name: Publish the test build
+        # Pull requests from this repo publish their APK to a separate "Test build" pre-release,
+        # so it can be installed with one tap. It never replaces the normal "latest" Release.
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk SunriseAlarm-test.apk
+          gh release delete test --yes --cleanup-tag || true
+          printf 'Test build from pull request #%s: %s\n\nOn your phone, tap SunriseAlarm-test.apk below to download it, then open it to install. It updates the app in place and keeps your settings.\n\nThis is a test version. The normal version is the "Sunrise Alarm for Android" release.\n' \
+            "$PR_NUMBER" "$PR_TITLE" > notes.txt
+          gh release create test SunriseAlarm-test.apk \
+            --target "$PR_SHA" \
+            --title "Test build (pull request #$PR_NUMBER)" \
+            --notes-file notes.txt \
+            --prerelease \
+            --latest=false
+
       - name: Publish to Releases
         if: github.event_name != 'pull_request'
         env:

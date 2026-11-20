@@ -44,5 +44,5 @@ For best results, tap **Fix** next to anything the Settings → Status card flag
 - Fonts are bundled from Fontsource (SIL Open Font License, see `fonts/`).
 - The alarm schedule logic sits between the `schedule:start` and `schedule:end` markers and is tested by `tests/schedule.test.js`:
   `TZ=Australia/Melbourne node tests/schedule.test.js`
-- GitHub Actions runs the tests and builds the APK on every push to `main` (published as the `latest` Release) and on pull requests (download the test APK from the workflow run's artifacts).
+- GitHub Actions runs the tests and builds the APK on every push to `main` (published as the `latest` Release) and on pull requests. A pull request's APK goes to the **Test build** pre-release on the Releases page (one tap to install on the phone); it never replaces the normal release.
 - Signing: set the `KEYSTORE_PASSWORD` secret. Optionally also set `KEYSTORE_BASE64` (`base64 -w0 android/release.jks`) and then `android/release.jks` can be deleted from the repo.
