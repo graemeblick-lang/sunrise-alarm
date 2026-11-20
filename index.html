@@ -7,8 +7,7 @@
 <title>Sunrise Alarm</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;600&family=Roboto+Flex:opsz,wght@8..144,300..700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="fonts.css">
 <style>
   :root{
     --amber:#ffb36b; --ink:#f4e9dc; --muted:#a8968a; --line:#2a2320; --card:#151110;
@@ -276,6 +275,12 @@
       <div class="hint" style="margin-top:2px">The app opens itself and starts the sunrise, even if you were watching YouTube or the screen was off. No need to tap Goodnight.</div>
     </div>
 
+    <div class="card" id="updateCard" style="display:none">
+      <div class="row"><span><b>A new version is ready</b></span></div>
+      <div class="hint" style="margin:6px 0 12px">Tap Download, then open the file to install it over the top. Your settings stay.</div>
+      <button class="big ghost" id="updateBtn" style="margin:0">Download update</button>
+    </div>
+
     <button class="big primary" id="goodnight">Goodnight</button>
     <button class="big ghost" id="preview">Preview the sunrise (1 minute)</button>
 
@@ -287,6 +292,7 @@
     </div>
 
     <div class="status" id="status"></div>
+    <div class="status" id="version"></div>
   </div>
 
   <div class="page" data-page="alarm" data-title="Alarm &amp; schedule">
@@ -576,7 +582,12 @@
   const DAYL = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
   function toast(msg){ const t=$("toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove("show"),3000); }
 
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
+  // In the browser a service worker keeps a copy for offline use. The Android app already has everything built in,
+  // so there it removes any service worker left over from when the app loaded the website.
+  if ("serviceWorker" in navigator){
+    if (window.Android && typeof window.Android.appVersion === "function") navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister())).catch(()=>{});
+    else navigator.serviceWorker.register("sw.js").catch(()=>{});
+  }
 
   // ---------- Colour themes ----------
   let THEMES = {
@@ -1725,6 +1736,18 @@
     if (!preview && alarmAt){ S.skip = +alarmAt; save(); }
     mode="setup"; show("setup"); paint(); toast(S.days.length ? "This alarm is off. Repeats stay on." : "Alarm off");
   };
+  // ---------- Updates (Android app: everything is built in, so new versions come as a new APK) ----------
+  window.nativeUpdate = code => { $("updateCard").style.display = ""; $("updateBtn").dataset.v = code; };
+  $("updateBtn").onclick = () => { try { NATIVE.openUpdate(); } catch(e){} };
+  if (NATIVE && typeof NATIVE.appVersion === "function"){
+    let v = ""; try { v = NATIVE.appVersion(); } catch(e){}
+    $("version").innerHTML = "";
+    const line = document.createElement("span"); line.textContent = `Sunrise Alarm ${v} · works offline, nothing loads from the website · `;
+    const chk = Object.assign(document.createElement("button"), { className:"small", textContent:"Check for updates" });
+    chk.onclick = () => { try { NATIVE.checkUpdate(); toast("Checking…"); } catch(e){} };
+    $("version").append(line, chk);
+  }
+
   $("goodnight").onclick = () => enterNight(false);
   $("preview").onclick = () => enterNight(true);
 

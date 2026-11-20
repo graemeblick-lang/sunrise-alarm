@@ -10,9 +10,11 @@ Open https://graemeblick-lang.github.io/sunrise-alarm/ in Chrome on Android, the
 
 ## Android app
 
-The `android/` folder is a small Android shell around the web app. It adds what a web page can't do: it opens itself at sunrise (even over the lock screen), keeps the screen on and controls brightness.
+The Android app is self-contained: the screens (`index.html`, fonts and icons) are built into the APK and nothing loads from the website, so it works with no internet. The `android/` folder adds what a web page can't do: it opens itself at sunrise (even over the lock screen), keeps the screen on, controls brightness, plays radio in the background and rings a backup alarm.
 
-GitHub builds it automatically. Download `SunriseAlarm.apk` from the latest Release on your phone and open it to install.
+GitHub builds it automatically. Download `SunriseAlarm.apk` from the latest Release on your phone and open it to install. After that, the app tells you on its main screen when a newer version is ready (it checks GitHub Releases at most twice a day, never near an alarm).
+
+The web page still keeps the same address inside the app (`graemeblick-lang.github.io/sunrise-alarm/`), but every request to it is answered from the APK. That keeps your saved settings, songs and logins, and the Spotify login redirect, working unchanged. The GitHub Pages site is only needed if you want to use the app in a browser instead.
 
 ### How the alarm stays reliable
 
@@ -25,7 +27,9 @@ For best results, tap **Fix** next to anything the Settings → Status card flag
 
 ## Development
 
-- `index.html` is the whole web app. The alarm schedule logic sits between the `schedule:start` and `schedule:end` markers and is tested by `tests/schedule.test.js`:
+- `index.html` is the whole web app. `android/app/build.gradle` copies it (with `fonts.css`, `fonts/`, the manifest and icons) into the APK at build time; `LocalSite.java` serves it.
+- Fonts are bundled from Fontsource (SIL Open Font License, see `fonts/`).
+- The alarm schedule logic sits between the `schedule:start` and `schedule:end` markers and is tested by `tests/schedule.test.js`:
   `TZ=Australia/Melbourne node tests/schedule.test.js`
 - GitHub Actions runs the tests and builds the APK on every push to `main` (published as the `latest` Release) and on pull requests (download the test APK from the workflow run's artifacts).
 - Signing: set the `KEYSTORE_PASSWORD` secret. Optionally also set `KEYSTORE_BASE64` (`base64 -w0 android/release.jks`) and then `android/release.jks` can be deleted from the repo.

@@ -3,10 +3,10 @@ name: Build Android app
 on:
   push:
     branches: [main]
-    paths: ["android/**", ".github/workflows/android.yml", "index.html", "tests/**"]
+    paths: ["android/**", ".github/workflows/android.yml", "index.html", "fonts.css", "fonts/**", "manifest.webmanifest", "*.png", "tests/**"]
   # Pull requests build and test too, but don't publish
   pull_request:
-    paths: ["android/**", ".github/workflows/android.yml", "index.html", "tests/**"]
+    paths: ["android/**", ".github/workflows/android.yml", "index.html", "fonts.css", "fonts/**", "manifest.webmanifest", "*.png", "tests/**"]
   workflow_dispatch:
 
 permissions:
@@ -58,16 +58,16 @@ jobs:
             echo "::warning::KEYSTORE_PASSWORD secret not set, so this build uses a one-off key. Uninstall the old app before installing it."
           fi
 
-      - name: Bundle an offline copy of the app
-        run: |
-          mkdir -p android/app/src/main/assets/www
-          cp index.html manifest.webmanifest icon-192.png icon-512.png android/app/src/main/assets/www/
-
       - name: Build APK
         working-directory: android
         env:
           VERSION_CODE: ${{ github.run_number }}
+        # The web app is built into the APK by the copyWebApp task in android/app/build.gradle
         run: gradle assembleRelease --no-daemon --stacktrace
+
+      - name: Check the web app is inside the APK
+        run: |
+          unzip -l android/app/build/outputs/apk/release/app-release.apk | grep -E "assets/www/(index.html|fonts.css)"
 
       - name: Keep the APK from this build
         if: github.event_name == 'pull_request'
@@ -83,8 +83,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp android/app/build/outputs/apk/release/app-release.apk SunriseAlarm.apk
+          # The app reads this to offer updates
+          echo "{\"versionCode\": ${{ github.run_number }}}" > version.json
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest SunriseAlarm.apk \
+          gh release create latest SunriseAlarm.apk version.json \
             --title "Sunrise Alarm for Android" \
             --notes "On your phone, tap SunriseAlarm.apk below to download it, then open it to install." \
             --latest

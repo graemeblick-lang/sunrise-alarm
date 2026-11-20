@@ -37,6 +37,18 @@ android {
         abortOnError false
     }
 
+    // The web app (index.html and friends at the top of the repo) is built into the APK,
+    // so the app never needs the website: it works with no internet and can't be changed from outside.
+    sourceSets {
+        main {
+            assets.srcDir(new File(project.buildDir, "generated/www-assets"))
+        }
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
@@ -48,3 +60,13 @@ dependencies {
     implementation files("libs/spotify-app-remote-release-0.8.0.aar")
     implementation "com.google.code.gson:gson:2.10.1"
 }
+
+def webAppDir = rootProject.projectDir.parentFile
+tasks.register("copyWebApp", Copy) {
+    from(webAppDir) {
+        include "index.html", "manifest.webmanifest", "fonts.css", "fonts/**",
+                "icon-192.png", "icon-512.png", "icon-maskable-512.png"
+    }
+    into new File(project.buildDir, "generated/www-assets/www")
+}
+tasks.named("preBuild") { dependsOn "copyWebApp" }

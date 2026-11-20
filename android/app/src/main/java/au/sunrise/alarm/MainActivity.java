@@ -25,6 +25,9 @@ import android.view.WindowManager;
 import android.webkit.GeolocationPermissions;
 import android.webkit.JavascriptInterface;
 import android.webkit.RenderProcessGoneDetail;
+import android.webkit.ServiceWorkerClient;
+import android.webkit.ServiceWorkerController;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
@@ -38,19 +41,16 @@ import android.widget.TextView;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * A thin Android shell around the Sunrise Alarm web app.
- * The app itself is the web page; this adds what a web page can't do:
+ * The Android side of Sunrise Alarm. The screens are a web page built into the APK (see LocalSite);
+ * nothing loads from the website. This adds what a web page can't do:
  * open itself at sunrise, show over the lock screen, keep the screen on, control brightness,
  * play audio in the background and ring a native backup alarm if the page ever fails.
  */
@@ -66,7 +66,7 @@ public class MainActivity extends Activity {
     private volatile boolean captureVolume = false;
     /** The host of the page that's showing; only our own page may use window.Android. */
     private volatile String pageHost = "";
-    private boolean pageLoaded = false, usingBundled = false;
+    private boolean pageLoaded = false;
     private long wakeAlarm = 0;   // the alarm this launch is for (0 = normal launch)
     private GeolocationPermissions.Callback geoCallback;
     private String geoOrigin;
@@ -129,7 +129,17 @@ public class MainActivity extends Activity {
         s.setMediaPlaybackRequiresUserGesture(false);   // lets the alarm sound start on its own
         s.setAllowFileAccess(false);                    // the page never needs the phone's files
         s.setAllowContentAccess(false);
+        s.setCacheMode(WebSettings.LOAD_NO_CACHE);       // the app's files come from the APK, never an old cached copy
         web.addJavascriptInterface(new Bridge(), "Android");
+
+        // A service worker left over from when the app loaded the website must also get the built-in files
+        try {
+            ServiceWorkerController.getInstance().setServiceWorkerClient(new ServiceWorkerClient() {
+                @Override public WebResourceResponse shouldInterceptRequest(WebResourceRequest req) {
+                    return LocalSite.serve(MainActivity.this, req.getUrl());
+                }
+            });
+        } catch (Exception ignored) { }
 
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -148,6 +158,12 @@ public class MainActivity extends Activity {
                 return false;
             }
 
+            /** Our own address is answered from the APK; nothing is fetched from the website. */
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest req) {
+                return LocalSite.serve(MainActivity.this, req.getUrl());
+            }
+
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) { trackHost(url); }
 
@@ -155,16 +171,9 @@ public class MainActivity extends Activity {
             public void doUpdateVisitedHistory(WebView view, String url, boolean isReload) { trackHost(url); }
 
             @Override
-            public void onPageFinished(WebView view, String url) { trackHost(url); pageLoaded = true; }
-
-            @Override
-            public void onReceivedError(WebView view, WebResourceRequest req, android.webkit.WebResourceError err) {
-                if (req.isForMainFrame() && isAppUrl(req.getUrl())) loadBundled();
-            }
-
-            @Override
-            public void onReceivedHttpError(WebView view, WebResourceRequest req, android.webkit.WebResourceResponse resp) {
-                if (req.isForMainFrame() && isAppUrl(req.getUrl()) && resp.getStatusCode() >= 400) loadBundled();
+            public void onPageFinished(WebView view, String url) {
+                trackHost(url);
+                if (isAppUrl(Uri.parse(url))) { pageLoaded = true; checkForUpdate(false); }
             }
 
             @Override
@@ -200,21 +209,23 @@ public class MainActivity extends Activity {
                 old.destroy();
             }
         } catch (Exception ignored) { }
-        pageLoaded = false; usingBundled = false; pageHost = "";
+        pageLoaded = false; pageHost = "";
         wakeAlarm = 0;   // the page picks the alarm back up from its own saved state
         try { buildWeb(); loadApp(); } catch (Throwable t) { App.save(this, "Rebuilding the page", t); }
     }
 
-    /** At alarm time use the copy built into the app straight away; otherwise the website, with the copy as a fallback. */
+    /** Open the app (served from the APK by LocalSite, at its usual address so saved settings are kept). */
     private void loadApp() {
-        // Around alarm time don't wait on the internet
-        boolean alarmLaunch = wakeAlarm != 0 || AlarmScheduler.activeAlarm(this, 0) > 0;
-        if (alarmLaunch && hasBundled()) { loadBundled(); return; }
+        if (!LocalSite.hasApp(this)) throw new IllegalStateException("The app's web files are missing from this APK");
         pageHost = APP_HOST;
         web.loadUrl(APP_URL + hash());
-        // If the website hasn't loaded within 10 s (no internet, GitHub down), use the copy built into the app
-        final WebView w = web;
-        web.postDelayed(() -> { if (w == web && !pageLoaded) loadBundled(); }, alarmLaunch ? 4000 : 10000);
+    }
+
+    /** Tell the page when a newer APK is on GitHub Releases. */
+    private void checkForUpdate(boolean force) {
+        UpdateCheck.check(this, force, code -> runOnUiThread(() -> {
+            if (web != null) web.evaluateJavascript("window.nativeUpdate && window.nativeUpdate(" + code + ")", null);
+        }));
     }
 
     private String hash() {
@@ -319,34 +330,9 @@ public class MainActivity extends Activity {
         }
     }
 
-    private boolean hasBundled() {
-        try {
-            String[] files = getAssets().list("www");
-            return files != null && Arrays.asList(files).contains("index.html");
-        } catch (Exception e) { return false; }
-    }
-
-    /** Show the copy of the app that's built into the APK, on the same web address so settings are kept. */
-    private void loadBundled() {
-        if (usingBundled || web == null || !hasBundled()) return;
-        usingBundled = true;
-        try (InputStream in = getAssets().open("www/index.html")) {
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            byte[] buf = new byte[16384]; int n;
-            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
-            String html = new String(out.toByteArray(), StandardCharsets.UTF_8);
-            pageHost = APP_HOST;
-            web.loadDataWithBaseURL(APP_URL + hash(), html, "text/html", "utf-8", null);
-        } catch (Exception e) {
-            usingBundled = false;
-            App.save(this, "Loading the built-in copy", e);
-            web.loadUrl(APP_URL + hash());
-        }
-    }
-
     private void trackHost(String url) {
         if (url == null) return;
-        if (url.startsWith("data:") || url.startsWith("about:")) return;   // the built-in copy reports its base URL separately
+        if (url.startsWith("data:") || url.startsWith("about:")) return;
         String h = Uri.parse(url).getHost();
         pageHost = h == null ? "" : h;
     }
@@ -518,6 +504,17 @@ public class MainActivity extends Activity {
 
         /** True when the app has the native backup alarm (so the page can say so). */
         @JavascriptInterface public boolean hasBackupAlarm() { return true; }
+
+        // ----- version and updates -----
+        @JavascriptInterface public String appVersion() { return BuildConfig.VERSION_NAME; }
+        @JavascriptInterface public void checkUpdate() { if (ok()) runOnUiThread(() -> checkForUpdate(true)); }
+        /** Opens the latest APK download in the browser; Android then offers to install it. */
+        @JavascriptInterface public void openUpdate() {
+            if (!ok()) return;
+            runOnUiThread(() -> {
+                try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(UpdateCheck.APK_URL))); } catch (Exception ignored) { }
+            });
+        }
 
         @JavascriptInterface public void fix(String what) {
             if (!ok()) return;
