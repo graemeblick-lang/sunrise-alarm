@@ -31,9 +31,9 @@ Spotify only lets an app start a chosen playlist if it's registered as a Spotify
 
 ### Other music apps (YouTube Music, Podcast Addict…)
 
-Choose **Wake-up sound → Apps** and pick the app. For it to work reliably, tap **Allow** when Sunrise asks for **Notification access**: it lets Sunrise start that exact app through its media session (the way Android Auto does) and check it's really playing. Sunrise doesn't read your notifications. Without it, Sunrise can only press play and hope, and may start whichever app you used last. If Android says it's a restricted setting: **Settings → Apps → Sunrise → ⋮ → Allow restricted settings**.
+Choose **Wake-up sound → Apps** and pick the app. Sunrise sends a play press only to that app and connects to its media service (the way Android Auto starts an app), so it never starts a different app. If the chosen app won't start, the chimes play.
 
-If the app can't be started, the chimes play instead, never a different app.
+Some apps only accept connections from apps they know. Those may only start if they're already running, so if one gives you chimes, open it and play something before bed. (Sunrise doesn't ask for Notification access to watch other apps: Google Play Protect blocks installing apps from outside the Play Store that ask for it.)
 
 ### How the alarm stays reliable
 

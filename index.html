@@ -323,13 +323,6 @@
       <label class="t">Play</label>
       <div class="chips" id="srcChips"></div>
 
-      <div class="spbox" id="mediaAccessBox" style="display:none">
-        <div class="row"><span><b>Start the right app every time</b></span></div>
-        <div class="hint">Let Sunrise see which music app is playing, so it starts the app you chose (not the last one you used) and can tell it's really playing. Android calls this <b>Notification access</b>. Sunrise only uses it for music controls; it doesn't read or keep your notifications.</div>
-        <div class="chips btnrow" style="margin-top:8px"><button class="small" id="mediaAccessBtn">Allow</button></div>
-        <div class="hint" style="margin-top:8px">If Android says it's a restricted setting: open <b>Settings → Apps → Sunrise</b>, tap <b>⋮ → Allow restricted settings</b>, then tap Allow here again.</div>
-      </div>
-
       <div class="sub-panel" id="radioPanel">
         <select id="station"></select>
         <input type="url" id="customUrl" placeholder="Paste a stream link (https://…)">
@@ -836,8 +829,6 @@
     $("earlyHint").style.display = S.src==="chimes" ? "none" : "";
     $("earlyVol").value = S.earlyVol; $("earlyVolTxt").textContent = S.earlyVol + "%";
     paintSpotify();
-    const needsAccess = (S.src === "spotify" || S.src === "apps") && hasMediaAccessApi() && !mediaAccessOk();
-    $("mediaAccessBox").style.display = needsAccess ? "" : "none";
     $("station").value = S.station;
     if (!stationList()[S.station]) S.station = 0;
     renderStationSelect(); $("station").value = S.station;
@@ -1067,14 +1058,12 @@
       if (probs.includes("notifications")) fixes.push(`<span class="warn">⚠ Notifications are off, so the app can't open itself at sunrise.</span> <button class="small" data-fix="notifications">Fix</button>`);
       if (probs.includes("fullscreen")) fixes.push(`<span class="warn">⚠ "Full screen notifications" is off, so the app can't open over the lock screen.</span> <button class="small" data-fix="fullscreen">Fix</button>`);
       if (probs.includes("exact")) fixes.push(`<span class="warn">⚠ "Alarms & reminders" is off, so the alarm may go off late.</span> <button class="small" data-fix="exact">Fix</button>`);
-      if ((S.src === "spotify" || S.src === "apps") && hasMediaAccessApi() && !mediaAccessOk())
-        fixes.push(`<span class="warn">⚠ Sunrise can't see which music app is playing, so it may start the wrong one.</span> <button class="small" data-fix="media">Fix</button>`);
       if (probs.includes("battery")) fixes.push(`<span class="warn">⚠ Battery saving can freeze the app overnight.</span> Allow it to run in the background. <button class="small" data-fix="battery">Fix</button>`);
       const ok = [`✓ Screen stays on and brightness is handled for you.`];
       if (HAS_BACKUP) ok.push(`✓ Backup alarm: if the app ever fails to start ringing, the phone rings with its own alarm sound a minute later.`);
       ok.push(`Leave the phone on charge overnight.` + (HAS_BACKUP ? "" : ` Keep your normal alarm as a backup for the first few nights.`));
       $("status").innerHTML = fixes.concat(ok).join("<br><br>");
-      $("status").querySelectorAll("[data-fix]").forEach(btn=>btn.onclick=()=>{ try { btn.dataset.fix === "media" ? NATIVE.askMediaAccess() : NATIVE.fix(btn.dataset.fix); } catch(e){} });
+      $("status").querySelectorAll("[data-fix]").forEach(btn=>btn.onclick=()=>{ try { NATIVE.fix(btn.dataset.fix); } catch(e){} });
       return;
     }
     const installed = matchMedia("(display-mode: fullscreen), (display-mode: standalone)").matches;
@@ -1105,10 +1094,6 @@
       return m ? { uri:`spotify:${m[1]}:${m[2]}`, kind: m[1]==="track" ? "song" : m[1] } : null;
     }
   };
-  // Notification access lets Sunrise target the chosen music app (see MediaApps.java)
-  const hasMediaAccessApi = () => !!(NATIVE && typeof NATIVE.mediaAccess === "function");
-  const mediaAccessOk = () => { try { return NATIVE.mediaAccess(); } catch(e){ return false; } };
-  $("mediaAccessBtn").onclick = () => { try { NATIVE.askMediaAccess(); } catch(e){} };
   // The Spotify developer Client ID is built into the app; one saved by an older version still works
   const spId = () => { try { return (NATIVE && NATIVE.spotifyClientId && NATIVE.spotifyClientId()) || S.spClient || ""; } catch(e){ return S.spClient || ""; } };
   function paintSpotify(){
@@ -1286,12 +1271,10 @@
   // and check that sound really started
   let simplePkg = "com.spotify.music";
   function pressPause(){ try { NATIVE.appPause ? NATIVE.appPause(simplePkg) : NATIVE.spotifyPause(); } catch(e){} }
-  // Is that app (not just any app) playing? Needs Notification access; without it, only "is anything playing".
+  // Start one specific music app (see MediaApps.java): a play press sent only to that app, plus a connection
+  // to its media service. Never a headphone-style press, which could start whichever app played last.
   const SMART_APPS = !!(NATIVE && typeof NATIVE.appStart === "function");
-  function appPlaying(pkg){
-    let st = "unknown"; try { if (SMART_APPS) st = NATIVE.appState(pkg); } catch(e){}
-    return st === "playing" || (st === "unknown" && musicPlaying());
-  }
+  const appState = pkg => { try { return SMART_APPS ? NATIVE.appState(pkg) : "unknown"; } catch(e){ return "unknown"; } };
   async function startSimple(kind, pkg, name, already){
     using = kind; simplePkg = pkg;
     $("rNow").textContent = `Starting ${name}…`;
@@ -1299,31 +1282,24 @@
     holdFocus(false);
     clearInterval(chimeTimer); chimeTimer = null;
     try { if (ac && ac.state === "running") await ac.suspend(); } catch(e){}
+    // If something was already playing, "music is playing" wouldn't prove the chosen app started
+    const wasPlaying = musicPlaying();
     if (!already){
       let ok = false;
       try { ok = SMART_APPS ? NATIVE.appStart(pkg) : (NATIVE.appWake ? NATIVE.appWake(pkg) : NATIVE.spotifyWake()); } catch(e){}
       if (!ok) return simpleFail(kind, `Couldn't press play in ${name} (is it installed?)`);
       spNativeFade = true;
     }
-    let nudge = "";
     for (let i = 0; i < 12; i++){
       await sleep(1000);
       if (using !== kind) return;
-      if (appPlaying(pkg)){
-        let checked = false; try { checked = SMART_APPS && NATIVE.appState(pkg) === "playing"; } catch(e){}
-        // Without Notification access Sunrise only knows *something* is playing, so it says so
-        $("rNow").textContent = checked || !SMART_APPS ? `🎵 ${name}` : `🎵 Music playing (allow Notification access so Sunrise can check it's ${name})`;
-        return;
-      }
-      // Last resort after 4 s: a headphone-style press, which Android lets start an app that isn't running.
-      // It reaches the app that played last, so it's only sent when that's this app (or when Sunrise can't check).
-      if (i === 3 && !nudge){
-        try { nudge = SMART_APPS ? NATIVE.appNudge(pkg) : (NATIVE.mediaPlayAny && NATIVE.mediaPlayAny(), "blind"); } catch(e){ nudge = "error"; }
-      }
+      const st = appState(pkg);
+      // "playing": its own session says so. "unknown" (the app didn't let us connect): the press went only to
+      // that app, so new music playing is very likely it.
+      if (st === "playing" || (st === "unknown" && !wasPlaying && musicPlaying())){ $("rNow").textContent = `🎵 ${name}`; return; }
+      if (i === 3 && SMART_APPS) try { NATIVE.appRetry(pkg); } catch(e){}   // some apps need a second ask once awake
     }
-    simpleFail(kind, nudge === "skipped"
-      ? `${name} didn't start. Android only lets Sunrise wake it if it was the last app you played music in`
-      : `${name} didn't start playing`);
+    simpleFail(kind, `${name} didn't start playing`);
   }
   const startSpotifySimple = already => startSimple("spotify", "com.spotify.music", "Spotify", already);
   function simpleFail(kind, why){

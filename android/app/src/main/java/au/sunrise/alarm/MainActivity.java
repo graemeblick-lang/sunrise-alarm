@@ -331,6 +331,7 @@ public class MainActivity extends Activity {
         if (audio != null && AlarmScheduler.activeAlarm(this, 0) == 0) audio.musicRestore();
         if (spotify != null) spotify.disconnect();
         focus(false);
+        if (media != null) media.release();
         PlaybackService.listener = null;
         if (web != null) { try { web.destroy(); } catch (Exception ignored) { } web = null; }
         super.onDestroy();
@@ -510,30 +511,16 @@ public class MainActivity extends Activity {
         // ----- a chosen music app, through its media session (see MediaApps) -----
         /** Start that app playing. False if it isn't installed. */
         @JavascriptInterface public boolean appStart(String pkg) { return ok() && media.start(pkg); }
-        /** "playing", "not" or "unknown" (no Notification access, so we can't tell). */
+        /** "playing", "not" or "unknown" (the app didn't let Sunrise connect, so it can't tell). */
         @JavascriptInterface public String appState(String pkg) { return ok() ? media.state(pkg) : "unknown"; }
-        /** Headphone-style press, only if it would reach that app: "pressed", "skipped" or "blind". */
-        @JavascriptInterface public String appNudge(String pkg) { return ok() ? media.nudge(pkg) : "skipped"; }
-        @JavascriptInterface public boolean mediaAccess() { return media.hasAccess(); }
-        @JavascriptInterface public void askMediaAccess() {
-            if (!ok()) return;
-            runOnUiThread(() -> {
-                try { startActivity(media.accessSettings()); } catch (Exception e) {
-                    try { startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)); } catch (Exception ignored) { }
-                }
-            });
-        }
+        /** Ask again through the app's media session, if connected. */
+        @JavascriptInterface public void appRetry(String pkg) { if (ok()) media.retry(pkg); }
 
         // ----- sound the page plays itself -----
         @JavascriptInterface public void audioFocus(boolean on) { if (ok()) runOnUiThread(() -> focus(on)); }
         /** The phone's text size setting (1 = default), so the settings screens can follow it. */
         @JavascriptInterface public float fontScale() { return getResources().getConfiguration().fontScale; }
         @JavascriptInterface public void musicFadeStart() { if (ok()) audio.musicFadeStart(); }
-        /**
-         * Presses play through Android itself, like a headphone button. Reaches the app that last played
-         * (Android lets it start from cold, which a direct press can't always do on Android 12+).
-         */
-        @JavascriptInterface public void mediaPlayAny() { if (ok()) audio.systemPlay(); }
 
         // ----- Spotify app (official App Remote SDK) -----
         /** The Spotify developer Client ID built into this app (empty if none). */
