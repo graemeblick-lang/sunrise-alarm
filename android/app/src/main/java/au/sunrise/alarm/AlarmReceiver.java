@@ -65,6 +65,7 @@ public class AlarmReceiver extends BroadcastReceiver {
         AlarmScheduler.clearManualIf(c, alarmMs);
         if (alarmMs <= 0 || AlarmScheduler.rangFor(c, alarmMs)) return;                    // the app rang: all good
         if (System.currentTimeMillis() > alarmMs + AlarmScheduler.RING_WINDOW) return;     // far too late (phone was off)
+        AlarmLog.backup(c, alarmMs, System.currentTimeMillis());                           // the home screen will say so
 
         try {
             PlaybackService.backup(c, alarmMs);

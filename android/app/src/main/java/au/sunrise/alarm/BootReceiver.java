@@ -5,7 +5,7 @@ import android.content.Context;
 import android.content.Intent;
 
 /**
- * Alarms are cleared when the phone restarts and can be lost when the app is updated,
+ * Alarms are cleared when the phone restarts (recomputed from the settings, so the plan never runs out) and can be lost when the app is updated,
  * so put them back. Also re-check them when the clock or time zone changes.
  */
 public class BootReceiver extends BroadcastReceiver {
@@ -14,7 +14,7 @@ public class BootReceiver extends BroadcastReceiver {
         String a = intent.getAction();
         if (Intent.ACTION_BOOT_COMPLETED.equals(a) || Intent.ACTION_MY_PACKAGE_REPLACED.equals(a)
                 || Intent.ACTION_TIME_CHANGED.equals(a) || Intent.ACTION_TIMEZONE_CHANGED.equals(a)) {
-            try { AlarmScheduler.reschedule(c); } catch (Throwable t) { App.save(c, "Restoring alarms (" + a + ")", t); }
+            try { Alarms.refresh(c); } catch (Throwable t) { App.save(c, "Restoring alarms (" + a + ")", t); }
         }
     }
 }

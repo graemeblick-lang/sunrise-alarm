@@ -44,13 +44,31 @@ import androidx.compose.ui.unit.dp
 
 private val SUN_COLOUR_NAMES = listOf("Dawn", "Glow", "Daylight")
 
-/** 🌙 Night: the colour theme and the overnight clock. */
+/** 🌙 Night: starting the night screen, the sleep timer, the bedtime reminder, the colour theme and the clock. */
 @Composable
-fun NightScreen(initial: LookSettings, onChange: (LookSettings) -> Unit, onBack: () -> Unit) {
+fun NightScreen(
+    initial: LookSettings, initialNight: NightSettings,
+    onChange: (LookSettings) -> Unit, onNightChange: (NightSettings) -> Unit, onBack: () -> Unit,
+) {
     var s by remember { mutableStateOf(initial) }
     fun update(n: LookSettings) { s = n; onChange(n) }
+    var n by remember { mutableStateOf(initialNight) }
+    fun updateNight(v: NightSettings) { n = v; onNightChange(v) }
 
     SettingsScaffold("Night", onBack) {
+        SectionTitle("Start the night clock by itself")
+        Choice(NightSettings.AUTO_NIGHT_HOURS, n.autoNight, { if (it == 0) "Off" else "${it - 12} pm" }) { updateNight(n.copy(autoNight = it)) }
+        Hint(if (n.autoNight == 0) "Tap Goodnight on the home screen to start it."
+             else "When the phone is on the charger after ${n.autoNight - 12} pm, the night clock starts by itself (once a night).")
+
+        SectionTitle("Sleep timer")
+        Choice(NightSettings.SLEEP_TIMERS, n.sleepTimer, { if (it == 0) "Off" else "$it min" }) { updateNight(n.copy(sleepTimer = it)) }
+        Hint("Music you play from the night screen fades out after this long. Tap the timer on the night screen to change it for tonight.")
+
+        SectionTitle("Bedtime reminder")
+        Choice(NightSettings.BEDTIME_HOURS, n.bedtime, { if (it == 0) "Off" else "$it h" }) { updateNight(n.copy(bedtime = it)) }
+        Hint(if (n.bedtime == 0) "No reminder." else "A notification ${n.bedtime} hours before your alarm, with a Goodnight button.")
+
         SectionTitle("Colour theme")
         Column(Modifier.selectableGroup()) {
             val themes = buildList<Triple<String, String, String?>> {

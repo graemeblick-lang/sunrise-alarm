@@ -136,6 +136,10 @@ public final class AlarmScheduler {
         for (long t : candidates) if (t + BACKUP_DELAY > now && (target == 0 || t < target)) target = t;
         if (target > 0) setClock(c, target + BACKUP_DELAY, intent(c, ACTION_BACKUP, 4, target));
         else alarmManager(c).cancel(intent(c, ACTION_BACKUP, 4, 0));
+
+        // 3) The evening: bedtime reminder and auto-Goodnight; and the widget and tile show the new next alarm
+        try { Evening.reschedule(c); } catch (Throwable t) { App.save(c, "Evening reminders", t); }
+        try { Widgets.refresh(c); } catch (Throwable t) { App.save(c, "Widget and tile", t); }
     }
 
     private static void setClock(Context c, long atMs, PendingIntent pi) {

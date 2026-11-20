@@ -7,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -153,6 +154,28 @@ fun AlarmScreen(initial: AlarmSettings, is24Hour: Boolean, onChange: (AlarmSetti
                 AssistChip(onClick = { update(s.copy(pauseUntil = LocalDate.now().plusDays(7).toString())) }, label = { Text("1 week") })
                 if (paused != null) AssistChip(onClick = { update(s.copy(pauseUntil = "")) }, label = { Text("Clear") })
             }
+
+            SectionTitle("Public holidays")
+            val context = LocalContext.current
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                (listOf("") + Holidays.STATES).forEach { st ->
+                    FilterChip(
+                        selected = s.holidayState == st,
+                        onClick = { update(s.copy(holidayState = st)); if (st.isNotEmpty()) Holidays.refresh(context, force = true) },
+                        label = { Text(if (st.isEmpty()) "Ring anyway" else st) },
+                    )
+                }
+            }
+            val coming = Holidays.upcoming(s, LocalDate.now())
+            Hint(when {
+                s.holidayState.isEmpty() -> "Choose your state and weekday alarms won't ring on its public holidays."
+                coming.isEmpty() -> "No alarms on ${s.holidayState} public holidays. Getting the dates (needs the internet once)…"
+                else -> "No alarms on ${s.holidayState} public holidays. Next: " +
+                    coming.joinToString(", ") { (d, n) -> d.format(DateTimeFormatter.ofPattern("EEE d MMM")) + " " + n }
+            })
     }
 
     editingTime?.let { which ->

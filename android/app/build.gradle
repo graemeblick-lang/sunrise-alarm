@@ -42,6 +42,18 @@ android {
         abortOnError false
     }
 
+    // Screen tests run on the computer (Robolectric), with the app's resources
+    testOptions {
+        unitTests {
+            includeAndroidResources = true
+            all {
+                maxHeapSize = "2g"
+                // A stuck screen test fails in minutes instead of holding up the build
+                timeout.set(java.time.Duration.ofMinutes(10))
+            }
+        }
+    }
+
     buildFeatures {
         buildConfig true
         compose true      // native settings screens (Jetpack Compose, Material 3)
@@ -72,6 +84,11 @@ dependencies {
     implementation "androidx.core:core-ktx:1.13.1"
 
     testImplementation "junit:junit:4.13.2"
+    // Screen tests: Compose's test rules, run on the computer by Robolectric (no phone or emulator needed)
+    testImplementation platform("androidx.compose:compose-bom:2024.10.01")
+    testImplementation "androidx.compose.ui:ui-test-junit4"
+    testImplementation "org.robolectric:robolectric:4.13"
+    debugImplementation "androidx.compose.ui:ui-test-manifest"
     // Unit tests run against a stubbed android.jar whose org.json methods only throw "not mocked":
     // give them the real JSON library, which comes first on the test classpath
     testImplementation "org.json:json:20240303"

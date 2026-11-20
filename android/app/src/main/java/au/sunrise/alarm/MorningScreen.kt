@@ -78,16 +78,22 @@ fun MorningScreen(initial: MorningSettings, onChange: (MorningSettings) -> Unit,
                 else askPermission.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
             }) { Text("Use my location") }
         }
-        OutlinedTextField(
-            value = s.weatherLink,
-            onValueChange = { update(s.copy(weatherLink = it.trim())) },
-            label = { Text("Your BOM forecast page link (optional)") },
-            supportingText = { Text("Opens the BOM Weather app if you have it, otherwise this page or bom.gov.au. A WillyWeather link works too.") },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        Hint("Your location is saved only on this phone.")
+
+        SectionTitle("Calendar")
+        val askCalendar = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+            update(s.copy(calendar = ok))
+        }
+        SwitchRow(
+            title = "Show today's calendar",
+            subtitle = "Today's events from your phone's calendar, on the morning screen. They stay on this phone.",
+            checked = s.calendar,
+            onCheckedChange = { on ->
+                if (on && context.checkSelfPermission(Manifest.permission.READ_CALENDAR) != PackageManager.PERMISSION_GRANTED)
+                    askCalendar.launch(Manifest.permission.READ_CALENDAR)
+                else update(s.copy(calendar = on))
+            },
         )
-        Hint("Your location and links are saved only on this phone.")
 
         SectionTitle("Todoist")
         OutlinedTextField(

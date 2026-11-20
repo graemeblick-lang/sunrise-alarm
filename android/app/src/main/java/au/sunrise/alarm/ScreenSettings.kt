@@ -37,22 +37,22 @@ data class LookSettings(
     }
 }
 
-/** Morning settings: where the weather is for, the optional weather page link and the Todoist token. */
+/** Morning settings: where the weather is for, the optional Todoist token and the calendar. */
 data class MorningSettings(
     val lat: Double = -37.814,
     val lon: Double = 144.963,
     val place: String = "Melbourne",
-    /** Your BOM (or WillyWeather) page, opened from the morning screen. Empty = the BOM app, or bom.gov.au. */
-    val weatherLink: String = "",
     val todoToken: String = "",
+    /** Show today's events from the phone's calendar. */
+    val calendar: Boolean = false,
 ) {
     fun into(j: JSONObject) {
         j.put("lat", lat)
         j.put("lon", lon)
         j.put("place", place)
-        j.put("weatherLink", weatherLink)
-        j.remove("willy")
+        j.remove("weatherLink"); j.remove("willy")   // no longer used
         j.put("todoToken", todoToken)
+        j.put("calendar", calendar)
     }
 
     companion object {
@@ -62,23 +62,47 @@ data class MorningSettings(
                 lat = j.optDouble("lat", d.lat).takeIf { !it.isNaN() } ?: d.lat,
                 lon = j.optDouble("lon", d.lon).takeIf { !it.isNaN() } ?: d.lon,
                 place = j.optString("place", d.place).ifEmpty { d.place },
-                weatherLink = j.optString("weatherLink", j.optString("willy", "")),
                 todoToken = j.optString("todoToken", ""),
+                calendar = j.optBoolean("calendar", false),
             )
         }
 
+        /** The BOM Weather app, opened from the morning screen (bom.gov.au if it isn't installed). */
         const val BOM_APP = "au.gov.bom.metview"
         const val BOM_SITE = "https://www.bom.gov.au/"
 
-        /** Only BOM and WillyWeather pages are opened from the morning screen. */
-        fun linkOk(url: String): Boolean =
-            Regex("^https://(www\\.)?(bom\\.gov\\.au|willyweather\\.com\\.au)(/|$)").containsMatchIn(url)
-
-        /** The morning screen's button. */
-        fun linkLabel(url: String): String =
-            if (linkOk(url) && url.contains("willyweather")) "Open WillyWeather ↗" else "Open BOM forecast ↗"
-
         /** Rounded to 3 decimals (about 100 m), as the page does: no more precise than the weather needs. */
         fun round3(v: Double): Double = Math.round(v * 1000.0) / 1000.0
+    }
+}
+
+/** Night settings beyond the look: starting the night screen by itself, the sleep timer and the bedtime reminder. */
+data class NightSettings(
+    /** On the charger after this hour (20..23), the night screen starts by itself. 0 = off. */
+    val autoNight: Int = 0,
+    /** Music started from the night screen fades out after this many minutes. 0 = keeps playing. */
+    val sleepTimer: Int = 30,
+    /** A reminder this many hours before the next alarm. 0 = off. */
+    val bedtime: Int = 0,
+) {
+    fun into(j: JSONObject) {
+        j.put("autoNight", autoNight)
+        j.put("sleepTimer", sleepTimer)
+        j.put("bedtime", bedtime)
+    }
+
+    companion object {
+        val AUTO_NIGHT_HOURS = listOf(0, 20, 21, 22, 23)
+        val SLEEP_TIMERS = listOf(0, 15, 30, 60)
+        val BEDTIME_HOURS = listOf(0, 7, 8, 9)
+
+        fun from(j: JSONObject): NightSettings {
+            val d = NightSettings()
+            return NightSettings(
+                autoNight = j.optInt("autoNight", d.autoNight).takeIf { it in AUTO_NIGHT_HOURS } ?: 0,
+                sleepTimer = j.optInt("sleepTimer", d.sleepTimer).takeIf { it in SLEEP_TIMERS } ?: d.sleepTimer,
+                bedtime = j.optInt("bedtime", d.bedtime).takeIf { it in BEDTIME_HOURS } ?: 0,
+            )
+        }
     }
 }

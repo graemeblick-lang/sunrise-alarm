@@ -37,7 +37,8 @@ object HomeText {
         val prefix = if (p != null) "Paused until ${p.format(DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH))} · " else ""
         val a = s.nextAlarm(now) ?: return prefix.removeSuffix(" · ")
         val ms = a.toInstant().toEpochMilli()
-        return prefix + "Alarm ${dayWord(a, now)} at ${time(AlarmSettings.formatTime(a.toLocalTime()), is24Hour)} · ${until(ms, now)}"
+        val holiday = s.skippedHoliday(now)?.let { (d, name) -> " · not ${DAY_SHORT[d.dayOfWeek.value % 7]} ($name)" } ?: ""
+        return prefix + "Alarm ${dayWord(a, now)} at ${time(AlarmSettings.formatTime(a.toLocalTime()), is24Hour)} · ${until(ms, now)}" + holiday
     }
 
     /** The one-off alarm: "One-off alarm today at 7:12 pm · in 5 min", or "" if there isn't one. */
@@ -67,7 +68,10 @@ object HomeText {
 
     private fun themeName(s: LookSettings) = if (s.theme == Themes.PHONE) "Phone colours" else Themes.byKey(s.theme).name
 
-    fun night(s: LookSettings): String = "${themeName(s)} theme · clock brightness ${s.dim} of 6"
+    fun night(s: LookSettings, n: NightSettings = NightSettings()): String =
+        (if (n.autoNight > 0) "Starts on the charger after ${n.autoNight - 12} pm · " else "") +
+            (if (n.bedtime > 0) "reminder ${n.bedtime} h before · " else "") +
+            "${themeName(s)} theme"
 
     fun sunrise(s: LookSettings, dur: Int): String =
         "$dur min · ${if (s.sunCustom) "own colours" else "theme colours"} · up to ${s.sunMax}% bright"

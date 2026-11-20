@@ -39,9 +39,39 @@ data class Weather(
     val todayText: String, val high: Int, val low: Int, val rainChance: Int, val rainMm: Double, val wind: Int, val uv: Int,
     /** For the night screen's "Tomorrow" line. */
     val dayEmoji: String,
-    /** Chance of rain through the day: (hour 0..23, %), every 3 hours from 6 am to 9 pm. */
-    val rainByHour: List<Pair<Int, Int>> = emptyList(),
-)
+    /** Chance of rain each hour of the day: (hour 0..23, %). */
+    val rainHours: List<Pair<Int, Int>> = emptyList(),
+) {
+    /** For the bars: every 3 hours from 6 am to 9 pm. */
+    val rainByHour: List<Pair<Int, Int>> get() = rainHours.filter { (h, _) -> h in 6..21 && h % 3 == 0 }
+
+    /** A line or two for the day ahead, from [fromHour] on: "Rain likely from 3pm to 6pm, take an umbrella. Hot: 36°." */
+    fun summary(fromHour: Int): String {
+        val ahead = rainHours.filter { (h, _) -> h >= fromHour && h <= 21 }
+        val wet = ahead.filter { it.second >= 50 }.map { it.first }
+        val parts = ArrayList<String>()
+        when {
+            wet.isNotEmpty() -> {
+                val start = wet.first()
+                var end = start
+                while (end + 1 in wet) end++
+                parts += when {
+                    start > fromHour -> "Rain likely from ${hourText(start)}" + (if (end < 21) " to ${hourText(end + 1)}" else "")
+                    end < 21 -> "Rain likely until ${hourText(end + 1)}"
+                    else -> "Rain likely for the rest of the day"
+                } + ", take an umbrella"
+            }
+            ahead.any { it.second >= 30 } -> parts += "Chance of a shower around ${hourText(ahead.maxBy { it.second }.first)}"
+            ahead.isNotEmpty() -> parts += "Looks dry"
+        }
+        if (high >= 35) parts += "Hot: top of $high°, keep cool"
+        else if (high <= 12) parts += "Cold: top of only $high°"
+        if (wind >= 50) parts += "Windy, up to $wind km/h"
+        return parts.joinToString(". ").let { if (it.isEmpty()) it else "$it." }
+    }
+
+    private fun hourText(h: Int) = when { h == 0 || h == 24 -> "midnight"; h == 12 -> "midday"; h < 12 -> "${h}am"; else -> "${h - 12}pm" }
+}
 
 object WeatherData {
     private val WX = mapOf(
@@ -78,11 +108,11 @@ object WeatherData {
             todayText = dtxt.lowercase(), high = num("temperature_2m_max").roundToInt(), low = num("temperature_2m_min").roundToInt(),
             rainChance = num("precipitation_probability_max").roundToInt(), rainMm = num("precipitation_sum"),
             wind = num("wind_speed_10m_max").roundToInt(), uv = num("uv_index_max").roundToInt(), dayEmoji = dem,
-            rainByHour = hourlyRain(d, days.optString(i, today.toString())),
+            rainHours = hourlyRain(d, days.optString(i, today.toString())),
         )
     }
 
-    /** The chance of rain at 6 am, 9 am … 9 pm on [date] ("2026-11-23"), from Open-Meteo's hourly data. */
+    /** The chance of rain each hour on [date] ("2026-11-23"), from Open-Meteo's hourly data. */
     fun hourlyRain(d: JSONObject, date: String): List<Pair<Int, Int>> {
         val h = d.optJSONObject("hourly") ?: return emptyList()
         val times = h.optJSONArray("time") ?: return emptyList()
@@ -92,7 +122,7 @@ object WeatherData {
             val t = times.optString(k)
             if (!t.startsWith(date + "T")) continue
             val hour = t.substring(date.length + 1).take(2).toIntOrNull() ?: continue
-            if (hour in 6..21 && hour % 3 == 0 && !pct.isNull(k)) out += hour to pct.optDouble(k).roundToInt()
+            if (!pct.isNull(k)) out += hour to pct.optDouble(k).roundToInt()
         }
         return out
     }

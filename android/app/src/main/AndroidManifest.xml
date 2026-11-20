@@ -9,6 +9,8 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Optional: today's events on the morning screen (asked for only when you turn it on) -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <!-- Lets the app ask to be left alone by battery saving, so Android doesn't freeze it overnight -->
@@ -49,17 +51,14 @@
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode"
             android:screenOrientation="unspecified" />
 
-        <!-- The app opens here: the native home screen and settings (Jetpack Compose, Material 3). Predictive back is on. -->
+        <!-- The app opens here (through the ".MainActivity" launcher alias below): the home screen and settings
+             (Jetpack Compose, Material 3). Predictive back is on. -->
         <activity
             android:name=".SettingsActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:theme="@android:style/Theme.Material.NoActionBar"
             android:enableOnBackInvokedCallback="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
             <!-- Share a playlist from Spotify to Sunrise to make it the wake-up music -->
             <intent-filter android:label="Sunrise wake-up music">
                 <action android:name="android.intent.action.SEND" />
@@ -68,12 +67,47 @@
             </intent-filter>
         </activity>
 
+        <!-- The launcher icon. It keeps the old name (.MainActivity was the first version's screen) so home-screen
+             icons made back then still open the app instead of saying "App isn't installed". -->
+        <activity-alias
+            android:name=".MainActivity"
+            android:targetActivity=".SettingsActivity"
+            android:exported="true"
+            android:label="Sunrise">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
         <receiver android:name=".AlarmReceiver" android:exported="false" />
+        <!-- The bedtime reminder and starting the night screen on the charger -->
+        <receiver android:name=".EveningReceiver" android:exported="false" />
 
         <service
             android:name=".PlaybackService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
+
+        <!-- Home-screen widget: next alarm, Goodnight, Skip next -->
+        <receiver android:name=".AlarmWidget" android:exported="false" android:label="Sunrise alarm">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_alarm_info" />
+        </receiver>
+
+        <!-- Quick Settings tile: next alarm; tap for Goodnight -->
+        <service
+            android:name=".AlarmTile"
+            android:exported="true"
+            android:icon="@android:drawable/ic_lock_idle_alarm"
+            android:label="Sunrise"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
 
         <receiver android:name=".BootReceiver" android:exported="true">
             <intent-filter>
