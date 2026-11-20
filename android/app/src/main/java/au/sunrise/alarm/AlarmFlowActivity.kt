@@ -198,7 +198,7 @@ class AlarmFlowActivity : ComponentActivity() {
 
     private fun enterRing() {
         mode = "ring"; status = ""; ringEnteredAt = System.currentTimeMillis()
-        if (!preview) { AlarmScheduler.markRinging(this); PlaybackService.stopBackup(this) }
+        if (!preview) { AlarmScheduler.markRinging(this); PlaybackService.stopBackup(this); AlarmLog.rang(this, alarmAt, ringEnteredAt) }
         if (sound.earlyPlay && sound.using != null) sound.continueFromEarly()
         else { sound.earlyPlay = false; startSound() }
         brightness(1f)
@@ -208,13 +208,14 @@ class AlarmFlowActivity : ComponentActivity() {
         sound.stop(); soundChanged++
         snoozeUntil = System.currentTimeMillis() + if (preview) 15_000L else alarm.snooze * 60_000L
         mode = "snooze"; status = ""
-        if (!preview) { AlarmScheduler.markRinging(this); AlarmScheduler.armBackup(this, snoozeUntil) }   // if the app stalls, the phone still rings
+        if (!preview) { AlarmScheduler.markRinging(this); AlarmScheduler.armBackup(this, snoozeUntil); AlarmLog.snoozed(this, alarmAt) }   // if the app stalls, the phone still rings
     }
 
     /** "I'm up" on the alarm screen (keeps the music playing), or after the alarm gives up. */
     fun enterMorning(keepMusic: Boolean) {
         if (!(keepMusic && sound.musicOn)) { sound.stop(); soundChanged++ }
         sound.earlyPlay = false
+        if (!preview) AlarmLog.stopped(this, alarmAt, System.currentTimeMillis())
         disarm()
         mode = "morning"; morningSince = System.currentTimeMillis(); morningRefresh++
         brightness(1f)

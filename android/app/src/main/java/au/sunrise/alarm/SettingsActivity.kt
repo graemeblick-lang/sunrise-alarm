@@ -76,6 +76,7 @@ class SettingsActivity : ComponentActivity() {
                 save = { s -> save { s.into(it) } },
                 onOpen = { route = it },
                 onStart = { action -> startNight(action) },
+                onRestored = { themeKey = SettingsStore.read(this).optString("theme", "sunrise"); resumes++ },
             )
             "night" -> NightScreen(
                 initial = LookSettings.from(json),

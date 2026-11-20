@@ -268,8 +268,10 @@ private fun MorningView(a: AlarmFlowActivity, theme: FullTheme) {
     var weatherNote by remember { mutableStateOf("Loading…") }
     var tasks by remember { mutableStateOf<List<TodoTask>?>(null) }
     var tasksNote by remember { mutableStateOf("Loading…") }
+    var events by remember { mutableStateOf<List<CalEvent>?>(null) }
     LaunchedEffect(a.morningRefresh) {
         val today = LocalDate.now()
+        if (m.calendar) events = withContext(Dispatchers.IO) { runCatching { CalendarData.today(context) }.getOrDefault(emptyList()) }
         val json = withContext(Dispatchers.IO) { WeatherData.get(context, m.lat, m.lon, false) }
         weather = json?.let { runCatching { WeatherData.parse(it, today) }.getOrNull() }
         weatherNote = if (weather == null) "Couldn't load the weather. Check the Wi-Fi." else ""
@@ -295,6 +297,10 @@ private fun MorningView(a: AlarmFlowActivity, theme: FullTheme) {
                 LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.getDefault())),
                 color = rgb(theme.v("mSub")), fontSize = 20.sp, modifier = Modifier.padding(top = 6.dp, bottom = 20.dp),
             )
+            val woke = remember(a.morningRefresh) {
+                AlarmLog.entries(context).lastOrNull()?.takeIf { a.now - it.alarm in 0..12 * 3_600_000L }?.let { AlarmLog.line(it, a.is24Hour) } ?: ""
+            }
+            if (woke.isNotEmpty()) Text("⏰ $woke", color = rgb(theme.v("mSub")), fontSize = 15.sp, modifier = Modifier.padding(top = 0.dp, bottom = 16.dp))
             if (a.sound.musicOn) {
                 Card(theme, "Now playing") {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -324,6 +330,10 @@ private fun MorningView(a: AlarmFlowActivity, theme: FullTheme) {
                     }
                     Text("Today: ${w.todayText}" + if (w.rainMm >= 0.5) ", about ${"%.0f".format(w.rainMm)} mm of rain" else "",
                         color = ink, fontSize = 16.sp, modifier = Modifier.padding(top = 10.dp))
+                    val hourNow = Instant.ofEpochMilli(a.now).atZone(ZoneId.systemDefault()).hour
+                    val summary = w.summary(hourNow)
+                    if (summary.isNotEmpty()) Text(summary, color = ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(top = 6.dp))
                     Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                         Stat("High", "${w.high}°", theme); Stat("Low", "${w.low}°", theme)
                         Stat("Rain", "${w.rainChance}%", theme); Stat("Wind", "${w.wind} km/h", theme)
@@ -346,6 +356,23 @@ private fun MorningView(a: AlarmFlowActivity, theme: FullTheme) {
                     val len = sun?.let { ((it.second - it.first) / 60_000).toInt() }
                     Stat("Daylight", len?.let { "${it / 60}h ${it % 60}m" } ?: "–", theme)
                     if (sun == null) Stat("Sunset", "–", theme) else Stat("Sunset", timeWithAmPm(sun.second, a.is24Hour), theme)
+                }
+            }
+
+            if (m.calendar) {
+                Card(theme, "Calendar") {
+                    val list = events
+                    when {
+                        !CalendarData.allowed(context) -> Text("Allow Sunrise to see your calendar in Morning settings.", color = rgb(theme.v("mMuted")), fontSize = 15.sp)
+                        list == null -> Text("Loading…", color = rgb(theme.v("mMuted")), fontSize = 15.sp)
+                        list.isEmpty() -> Text("Nothing else in the calendar today.", color = rgb(theme.v("mMuted")), fontSize = 15.sp)
+                        else -> list.forEach { e ->
+                            Row(Modifier.padding(vertical = 6.dp)) {
+                                Text(CalendarData.timeText(e, a.is24Hour), color = rgb(theme.v("mMuted")), fontSize = 16.sp, modifier = Modifier.width(84.dp))
+                                Text(e.title, color = ink, fontSize = 17.sp)
+                            }
+                        }
+                    }
                 }
             }
 

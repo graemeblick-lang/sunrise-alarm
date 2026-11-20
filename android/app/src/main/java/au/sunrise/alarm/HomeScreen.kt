@@ -4,7 +4,10 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.AssistChip
@@ -60,6 +63,7 @@ fun HomeScreen(
     save: (AlarmSettings) -> Unit,
     onOpen: (String) -> Unit,
     onStart: (String) -> Unit,
+    onRestored: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val json = remember(refresh) { SettingsStore.read(context) }
@@ -78,6 +82,24 @@ fun HomeScreen(
     LaunchedEffect(Unit) { UpdateCheck.check(context, false) { code -> main.post { newVersion = code } } }
 
     var editingTime by remember { mutableStateOf(false) }
+    var testingBackup by remember { mutableStateOf(false) }
+    var backupNote by remember { mutableStateOf<String?>(null) }
+    val exportFile = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) backupNote = runCatching {
+            context.contentResolver.openOutputStream(uri, "wt")!!.use { it.write(SettingsBackup.export(SettingsStore.read(context)).toByteArray()) }
+            "Settings saved."
+        }.getOrElse { "Couldn't save the file." }
+    }
+    val importFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) backupNote = runCatching {
+            val text = context.contentResolver.openInputStream(uri)!!.use { it.readBytes().take(200_000).toByteArray().decodeToString() }
+            val restored = SettingsBackup.restore(SettingsStore.read(context), text) ?: return@runCatching "That isn't a Sunrise settings file."
+            SettingsStore.write(context, restored.toString())
+            Alarms.refresh(context)
+            onRestored()
+            "Settings restored."
+        }.getOrElse { "Couldn't read the file." }
+    }
     var pickingOnce by remember { mutableStateOf(false) }
     var pickingPause by remember { mutableStateOf(false) }
     // A crash saved last time (App.java): offer to copy it, then forget it
@@ -101,6 +123,26 @@ fun HomeScreen(
                         }) { Text("Copy") }
                         TextButton(onClick = { crashFile.delete(); crash = null }) { Text("Dismiss") }
                     }
+                }
+            }
+        }
+
+        // ----- an alarm that needed the backup alarm (the wake-up log) -----
+        var dismissedLog by remember(refresh) { mutableStateOf(AlarmLog.dismissed(context)) }
+        AlarmLog.problem(AlarmLog.entries(context), System.currentTimeMillis(), dismissedLog)?.let { e ->
+            Surface(
+                color = MaterialTheme.colorScheme.errorContainer,
+                shape = MaterialTheme.shapes.large,
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+            ) {
+                Column(Modifier.padding(20.dp)) {
+                    val day = java.time.Instant.ofEpochMilli(e.alarm).atZone(now.zone)
+                    Text("The ${HomeText.time(AlarmSettings.formatTime(day.toLocalTime()), is24Hour)} alarm on " +
+                        day.format(java.time.format.DateTimeFormatter.ofPattern("EEEE")) + " needed the backup alarm",
+                        style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onErrorContainer)
+                    Text("Sunrise didn't start ringing by itself, so the phone's own alarm sound rang. Check Phone check below " +
+                        "(battery saving is the usual cause).", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onErrorContainer)
+                    TextButton(onClick = { AlarmLog.dismiss(context, e.alarm); dismissedLog = e.alarm }) { Text("Dismiss") }
                 }
             }
         }
@@ -226,6 +268,18 @@ fun HomeScreen(
         Hint("✓ Screen stays on and brightness is handled for you.")
         Hint("✓ Backup alarm: if the app ever fails to start ringing, the phone rings with its own alarm sound a minute later.")
         Hint("Leave the phone on charge overnight.")
+        Row(Modifier.padding(horizontal = 8.dp)) {
+            TextButton(onClick = { testingBackup = true }) { Text("Test the backup alarm") }
+        }
+
+        // ----- settings backup -----
+        SectionTitle("Your settings")
+        Hint("Save them to a file (for a new phone, or before reinstalling). The file includes your Todoist token, if you set one.")
+        Row(Modifier.padding(horizontal = 8.dp)) {
+            TextButton(onClick = { exportFile.launch("sunrise-settings.json") }) { Text("Back up") }
+            TextButton(onClick = { importFile.launch(arrayOf("application/json", "text/plain", "*/*")) }) { Text("Restore") }
+        }
+        backupNote?.let { Hint(it) }
 
         HorizontalDivider(Modifier.padding(16.dp))
         Row(Modifier.padding(horizontal = 16.dp)) {
@@ -267,6 +321,16 @@ fun HomeScreen(
                 update(alarm.withOnce(at.toInstant().toEpochMilli(), System.currentTimeMillis()))
                 pickingOnce = false
             },
+        )
+    }
+
+    if (testingBackup) {
+        AlertDialog(
+            onDismissRequest = { testingBackup = false },
+            title = { Text("Test the backup alarm?") },
+            text = { Text("The phone's own alarm sound rings now, fading up, as it would if Sunrise ever failed to start. Press Stop in the notification to end it.") },
+            confirmButton = { TextButton(onClick = { testingBackup = false; runCatching { PlaybackService.backup(context, 0L) } }) { Text("Ring now") } },
+            dismissButton = { TextButton(onClick = { testingBackup = false }) { Text("Cancel") } },
         )
     }
 

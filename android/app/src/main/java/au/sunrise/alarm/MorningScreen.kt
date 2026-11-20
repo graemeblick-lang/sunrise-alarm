@@ -80,6 +80,21 @@ fun MorningScreen(initial: MorningSettings, onChange: (MorningSettings) -> Unit,
         }
         Hint("Your location is saved only on this phone.")
 
+        SectionTitle("Calendar")
+        val askCalendar = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+            update(s.copy(calendar = ok))
+        }
+        SwitchRow(
+            title = "Show today's calendar",
+            subtitle = "Today's events from your phone's calendar, on the morning screen. They stay on this phone.",
+            checked = s.calendar,
+            onCheckedChange = { on ->
+                if (on && context.checkSelfPermission(Manifest.permission.READ_CALENDAR) != PackageManager.PERMISSION_GRANTED)
+                    askCalendar.launch(Manifest.permission.READ_CALENDAR)
+                else update(s.copy(calendar = on))
+            },
+        )
+
         SectionTitle("Todoist")
         OutlinedTextField(
             value = s.todoToken,

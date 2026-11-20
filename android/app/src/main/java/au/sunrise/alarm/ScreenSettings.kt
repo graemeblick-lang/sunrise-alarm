@@ -37,12 +37,14 @@ data class LookSettings(
     }
 }
 
-/** Morning settings: where the weather is for, and the optional Todoist token. */
+/** Morning settings: where the weather is for, the optional Todoist token and the calendar. */
 data class MorningSettings(
     val lat: Double = -37.814,
     val lon: Double = 144.963,
     val place: String = "Melbourne",
     val todoToken: String = "",
+    /** Show today's events from the phone's calendar. */
+    val calendar: Boolean = false,
 ) {
     fun into(j: JSONObject) {
         j.put("lat", lat)
@@ -50,6 +52,7 @@ data class MorningSettings(
         j.put("place", place)
         j.remove("weatherLink"); j.remove("willy")   // no longer used
         j.put("todoToken", todoToken)
+        j.put("calendar", calendar)
     }
 
     companion object {
@@ -60,6 +63,7 @@ data class MorningSettings(
                 lon = j.optDouble("lon", d.lon).takeIf { !it.isNaN() } ?: d.lon,
                 place = j.optString("place", d.place).ifEmpty { d.place },
                 todoToken = j.optString("todoToken", ""),
+                calendar = j.optBoolean("calendar", false),
             )
         }
 

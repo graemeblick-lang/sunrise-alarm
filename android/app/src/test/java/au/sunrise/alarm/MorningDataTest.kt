@@ -41,8 +41,38 @@ class MorningDataTest {
         val j = sample.trimEnd().removeSuffix("}") + ""","hourly":{"time":["2026-11-23T05:00","2026-11-23T06:00","2026-11-23T07:00","2026-11-23T09:00","2026-11-23T21:00","2026-11-24T06:00"],
           "precipitation_probability":[90,10,50,35,null,80]}}"""
         assertEquals(listOf(6 to 10, 9 to 35), WeatherData.parse(j, LocalDate.of(2026, 11, 23)).rainByHour)
+        assertEquals(listOf(5 to 90, 6 to 10, 7 to 50, 9 to 35), WeatherData.parse(j, LocalDate.of(2026, 11, 23)).rainHours)
         assertEquals(listOf(6 to 80), WeatherData.parse(j, LocalDate.of(2026, 11, 24)).rainByHour)
         assertEquals(emptyList<Pair<Int, Int>>(), WeatherData.parse(sample, LocalDate.of(2026, 11, 23)).rainByHour)
+    }
+
+    private fun w(rain: List<Pair<Int, Int>>, high: Int = 24, wind: Int = 20) =
+        Weather("", "", 20, 20, "", high, 10, 0, 0.0, wind, 3, "", rain)
+
+    @Test fun weatherSummary() {
+        val showers = (0..23).map { it to if (it in 15..17) 70 else 10 }
+        assertEquals("Rain likely from 3pm to 6pm, take an umbrella.", w(showers).summary(7))
+        assertEquals("Rain likely until 6pm, take an umbrella.", w(showers).summary(16))
+        assertEquals("Looks dry.", w(showers).summary(19))
+        assertEquals("Chance of a shower around 2pm.", w((0..23).map { it to if (it == 14) 40 else 5 }).summary(7))
+        assertEquals("Rain likely from 8pm, take an umbrella. Hot: top of 37°, keep cool. Windy, up to 60 km/h.",
+            w((0..23).map { it to if (it >= 20) 80 else 0 }, high = 37, wind = 60).summary(7))
+        assertEquals("Cold: top of only 11°.", w(emptyList(), high = 11).summary(7))
+    }
+
+    @Test fun calendarPicksTodayAndWhatsNotOver() {
+        val mel = ZoneId.of("Australia/Melbourne")
+        val day = LocalDate.of(2026, 11, 23)
+        fun t(h: Int) = day.atTime(h, 0).atZone(mel).toInstant().toEpochMilli()
+        val utcMidnight = day.atStartOfDay(ZoneId.of("UTC")).toInstant().toEpochMilli()
+        val events = listOf(
+            CalEvent("Dentist", t(9), t(10), false), CalEvent("Done already", t(6), t(7), false),
+            CalEvent("Bin night", utcMidnight, utcMidnight + 86_400_000, true),
+            CalEvent("Yesterday all day", utcMidnight - 86_400_000, utcMidnight, true),
+        )
+        assertEquals(listOf("Bin night", "Dentist"), CalendarData.pick(events, t(8), day, mel).map { it.title })
+        assertEquals("9:00 am", CalendarData.timeText(events[0], false, mel))
+        assertEquals("All day", CalendarData.timeText(events[2], false, mel))
     }
 
     @Test fun unknownWeatherCode() = assertEquals("🌡️" to "—", WeatherData.describe(1234))
