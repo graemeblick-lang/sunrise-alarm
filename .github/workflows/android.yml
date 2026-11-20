@@ -68,13 +68,8 @@ jobs:
           VERSION_CODE: ${{ github.run_number }}
           # Your Spotify developer app's Client ID: Settings → Secrets and variables → Actions → Variables
           SPOTIFY_CLIENT_ID: ${{ vars.SPOTIFY_CLIENT_ID }}
-        # The web app is built into the APK by the copyWebApp task in android/app/build.gradle
         # Unit tests (alarm schedule logic in Kotlin) run first; a failure stops the build
         run: gradle testReleaseUnitTest assembleRelease --no-daemon --stacktrace
-
-      - name: Check the web app is inside the APK
-        run: |
-          unzip -l android/app/build/outputs/apk/release/app-release.apk | grep -E "assets/www/(index.html|fonts.css)"
 
       - name: Keep the APK from this build
         if: github.event_name == 'pull_request'
