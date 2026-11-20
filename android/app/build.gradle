@@ -80,6 +80,9 @@ dependencies {
     implementation "androidx.core:core-ktx:1.13.1"
 
     testImplementation "junit:junit:4.13.2"
+    // Unit tests run against a stubbed android.jar whose org.json methods only throw "not mocked":
+    // give them the real JSON library, which comes first on the test classpath
+    testImplementation "org.json:json:20240303"
 }
 
 def webAppDir = rootProject.projectDir.parentFile
