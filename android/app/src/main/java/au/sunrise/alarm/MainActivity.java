@@ -11,6 +11,8 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Typeface;
+import android.media.AudioAttributes;
+import android.media.AudioFocusRequest;
 import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Build;
@@ -62,6 +64,9 @@ public class MainActivity extends Activity {
 
     private WebView web;
     private NativeAudio audio;
+    private MediaApps media;
+    /** Audio focus held while the page plays chimes or your songs, so other apps pause for the alarm. */
+    private AudioFocusRequest focusReq;
     private SpotifyRemote spotify;
     private volatile boolean captureVolume = false;
     /**
@@ -104,6 +109,7 @@ public class MainActivity extends Activity {
         try { goFullscreen(); } catch (Exception ignored) { }
 
         audio = new NativeAudio(this);
+        media = new MediaApps(this, audio);
         PlaybackService.listener = this::sendAudioEvent;
         spotify = new SpotifyRemote(this::sendAudioEvent);
 
@@ -228,6 +234,33 @@ public class MainActivity extends Activity {
         web.loadUrl(APP_URL + hash());
     }
 
+    /**
+     * Ask for (or give back) audio focus for sound the page plays itself. Other apps pause while we hold it.
+     * A phone call takes it for a while: the page pauses the alarm sound and resumes after.
+     */
+    private void focus(boolean on) {
+        AudioManager am = getSystemService(AudioManager.class);
+        try {
+            if (on) {
+                if (focusReq != null) return;
+                focusReq = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                        .setAudioAttributes(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM)
+                                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
+                        .setWillPauseWhenDucked(false)
+                        .setOnAudioFocusChangeListener(change -> {
+                            if (change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) sendAudioEvent("focus:pause");
+                            else if (change == AudioManager.AUDIOFOCUS_GAIN) sendAudioEvent("focus:resume");
+                            // A permanent loss (another app started playing) doesn't silence an alarm
+                        })
+                        .build();
+                am.requestAudioFocus(focusReq);
+            } else if (focusReq != null) {
+                am.abandonAudioFocusRequest(focusReq);
+                focusReq = null;
+            }
+        } catch (Exception ignored) { }
+    }
+
     /** Keeps a Spotify link shared to Sunrise (Spotify → Share → Sunrise). Anything else is ignored. */
     private boolean takeShare(Intent i) {
         if (i == null || !Intent.ACTION_SEND.equals(i.getAction())) return false;
@@ -297,6 +330,7 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         if (audio != null && AlarmScheduler.activeAlarm(this, 0) == 0) audio.musicRestore();
         if (spotify != null) spotify.disconnect();
+        focus(false);
         PlaybackService.listener = null;
         if (web != null) { try { web.destroy(); } catch (Exception ignored) { } web = null; }
         super.onDestroy();
@@ -471,7 +505,29 @@ public class MainActivity extends Activity {
             return arr.toString();
         }
         @JavascriptInterface public boolean appWake(String pkg) { if (!ok()) return false; audio.musicFadeStart(); return audio.appKey(pkg, KeyEvent.KEYCODE_MEDIA_PLAY); }
-        @JavascriptInterface public void appPause(String pkg) { if (ok()) audio.appKey(pkg, KeyEvent.KEYCODE_MEDIA_PAUSE); }
+        @JavascriptInterface public void appPause(String pkg) { if (ok()) media.pause(pkg); }
+
+        // ----- a chosen music app, through its media session (see MediaApps) -----
+        /** Start that app playing. False if it isn't installed. */
+        @JavascriptInterface public boolean appStart(String pkg) { return ok() && media.start(pkg); }
+        /** "playing", "not" or "unknown" (no Notification access, so we can't tell). */
+        @JavascriptInterface public String appState(String pkg) { return ok() ? media.state(pkg) : "unknown"; }
+        /** Headphone-style press, only if it would reach that app: "pressed", "skipped" or "blind". */
+        @JavascriptInterface public String appNudge(String pkg) { return ok() ? media.nudge(pkg) : "skipped"; }
+        @JavascriptInterface public boolean mediaAccess() { return media.hasAccess(); }
+        @JavascriptInterface public void askMediaAccess() {
+            if (!ok()) return;
+            runOnUiThread(() -> {
+                try { startActivity(media.accessSettings()); } catch (Exception e) {
+                    try { startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)); } catch (Exception ignored) { }
+                }
+            });
+        }
+
+        // ----- sound the page plays itself -----
+        @JavascriptInterface public void audioFocus(boolean on) { if (ok()) runOnUiThread(() -> focus(on)); }
+        /** The phone's text size setting (1 = default), so the settings screens can follow it. */
+        @JavascriptInterface public float fontScale() { return getResources().getConfiguration().fontScale; }
         @JavascriptInterface public void musicFadeStart() { if (ok()) audio.musicFadeStart(); }
         /**
          * Presses play through Android itself, like a headphone button. Reaches the app that last played
@@ -506,7 +562,7 @@ public class MainActivity extends Activity {
         // ----- Spotify by media button, and media volume -----
         /** Turns media volume down, then presses play in Spotify so it wakes up. */
         @JavascriptInterface public boolean spotifyWake() { if (!ok()) return false; audio.musicFadeStart(); return audio.spotifyKey(KeyEvent.KEYCODE_MEDIA_PLAY); }
-        @JavascriptInterface public void spotifyPause() { if (ok()) audio.spotifyKey(KeyEvent.KEYCODE_MEDIA_PAUSE); }
+        @JavascriptInterface public void spotifyPause() { if (ok()) media.pause("com.spotify.music"); }
         @JavascriptInterface public void musicVolume(double f) { if (ok()) audio.setMusic((float) f); }
         @JavascriptInterface public void musicRestore() { if (ok()) audio.musicRestore(); }
         /** True if any app is playing audio right now (used to check Spotify really started). */

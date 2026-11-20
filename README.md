@@ -29,6 +29,12 @@ Spotify only lets an app start a chosen playlist if it's registered as a Spotify
 2. Copy its **Client ID**. In this GitHub repo: **Settings → Secrets and variables → Actions → Variables → New repository variable**, name `SPOTIFY_CLIENT_ID`.
 3. The next build has it built in. (Without it, Spotify still works but plays what you last played.)
 
+### Other music apps (YouTube Music, Podcast Addict…)
+
+Choose **Wake-up sound → Apps** and pick the app. For it to work reliably, tap **Allow** when Sunrise asks for **Notification access**: it lets Sunrise start that exact app through its media session (the way Android Auto does) and check it's really playing. Sunrise doesn't read your notifications. Without it, Sunrise can only press play and hope, and may start whichever app you used last. If Android says it's a restricted setting: **Settings → Apps → Sunrise → ⋮ → Allow restricted settings**.
+
+If the app can't be started, the chimes play instead, never a different app.
+
 ### How the alarm stays reliable
 
 - **The app keeps its own schedule.** The page sends the next 8 alarms to Android, which keeps them set even if the app is closed, the phone restarts, the app updates or the clock/time zone changes.

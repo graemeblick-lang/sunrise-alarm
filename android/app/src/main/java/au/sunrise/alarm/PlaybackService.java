@@ -9,6 +9,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
 import android.media.AudioAttributes;
+import android.media.AudioFocusRequest;
+import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.media.session.MediaSession;
 import android.media.session.PlaybackState;
@@ -49,6 +51,10 @@ public class PlaybackService extends Service {
     private boolean backupMode = false;
     private long backupStarted = 0, backupAlarm = 0;
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private AudioFocusRequest focusReq;
+    /** 1 normally; lower while another app briefly needs the sound (navigation directions). */
+    private float duck = 1f;
+    private boolean pausedForFocus = false;
 
     // ---------- called from the app ----------
     static void play(Context c, String url, String title, float volume) {
@@ -121,7 +127,7 @@ public class PlaybackService extends Service {
             } else if (ACTION_VOLUME.equals(action)) {
                 if (!backupMode) {
                     volume = intent.getFloatExtra("volume", volume);
-                    try { if (player != null) player.setVolume(volume, volume); } catch (Exception ignored) { }
+                    applyVolume();
                 }
             } else if (ACTION_STOP_BACKUP.equals(action)) {
                 if (backupMode) shutdown();
@@ -145,12 +151,58 @@ public class PlaybackService extends Service {
             long t = System.currentTimeMillis() - backupStarted;
             if (t > AlarmScheduler.RING_WINDOW) { shutdown(); return; }
             volume = Math.min(1f, 0.25f + 0.75f * t / 90_000f);
-            try { player.setVolume(volume, volume); } catch (Exception ignored) { }
+            applyVolume();
             handler.postDelayed(this, 2000);
         }
     };
 
     private void stopBackupTimers() { handler.removeCallbacks(backupRamp); }
+
+    private void applyVolume() {
+        try { if (player != null) player.setVolume(volume * duck, volume * duck); } catch (Exception ignored) { }
+    }
+
+    // ---------- audio focus: other apps pause for the alarm; a phone call pauses the alarm until it ends ----------
+    private void requestFocus() {
+        if (focusReq != null) return;
+        try {
+            focusReq = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                    .setAudioAttributes(alarmAttributes())
+                    .setWillPauseWhenDucked(false)
+                    .setOnAudioFocusChangeListener(this::onFocusChange, handler)
+                    .build();
+            getSystemService(AudioManager.class).requestAudioFocus(focusReq);
+            // Even if it's refused (e.g. during a call) the alarm still plays: waking you matters more
+        } catch (Exception ignored) { }
+    }
+
+    private void abandonFocus() {
+        if (focusReq == null) return;
+        try { getSystemService(AudioManager.class).abandonAudioFocusRequest(focusReq); } catch (Exception ignored) { }
+        focusReq = null;
+    }
+
+    private void onFocusChange(int change) {
+        if (player == null) return;
+        try {
+            switch (change) {
+                case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:            // phone call: pause, carry on after
+                    if (player.isPlaying()) { player.pause(); pausedForFocus = true; }
+                    break;
+                case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:   // e.g. navigation speaking: quieter for a moment
+                    duck = 0.3f; applyVolume();
+                    break;
+                case AudioManager.AUDIOFOCUS_GAIN:
+                    duck = 1f; applyVolume();
+                    if (pausedForFocus) { pausedForFocus = false; player.start(); }
+                    break;
+                case AudioManager.AUDIOFOCUS_LOSS:
+                    // You started something else. The radio stops (and the app is told); the backup alarm keeps ringing.
+                    if (!backupMode) stopFromUser();
+                    break;
+            }
+        } catch (Exception ignored) { }
+    }
 
     private static AudioAttributes alarmAttributes() {
         return new AudioAttributes.Builder()
@@ -209,7 +261,9 @@ public class PlaybackService extends Service {
             mp.setWakeMode(this, PowerManager.PARTIAL_WAKE_LOCK);   // keep playing with the screen off
             mp.setDataSource(this, uri);
             mp.setLooping(loop);
+            duck = 1f; pausedForFocus = false;
             mp.setVolume(volume, volume);
+            requestFocus();
             mp.setOnPreparedListener(p -> { if (p == player) { p.start(); setState(PlaybackState.STATE_PLAYING); if (!backupMode) send("playing"); } });
             mp.setOnErrorListener((p, w, e) -> { if (p == player) { if (!backupMode) send("error"); shutdown(); } return true; });
             mp.setOnCompletionListener(p -> { if (p == player) { if (!backupMode) send("ended"); shutdown(); } });
@@ -229,6 +283,7 @@ public class PlaybackService extends Service {
 
     private void shutdown() {
         stopBackupTimers();
+        abandonFocus();
         backupMode = false;
         releasePlayer();
         setState(PlaybackState.STATE_STOPPED);
@@ -256,6 +311,7 @@ public class PlaybackService extends Service {
     public void onDestroy() {
         running = false;
         stopBackupTimers();
+        abandonFocus();
         releasePlayer();
         try { session.release(); } catch (Exception ignored) { }
         super.onDestroy();
