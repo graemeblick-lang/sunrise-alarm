@@ -1,50 +1,73 @@
 package au.sunrise.alarm;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.AlarmManager;
 import android.app.NotificationManager;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
+import android.graphics.Typeface;
+import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.PowerManager;
 import android.provider.Settings;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.webkit.GeolocationPermissions;
 import android.webkit.JavascriptInterface;
+import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.webkit.RenderProcessGoneDetail;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
-import android.content.ClipData;
-import android.content.ClipboardManager;
-import android.graphics.Typeface;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * A thin Android shell around the Sunrise Alarm web app.
  * The app itself is the web page; this adds what a web page can't do:
- * open itself at sunrise, show over the lock screen, keep the screen on and control brightness.
+ * open itself at sunrise, show over the lock screen, keep the screen on, control brightness,
+ * play audio in the background and ring a native backup alarm if the page ever fails.
  */
 public class MainActivity extends Activity {
     static final String APP_URL = "https://graemeblick-lang.github.io/sunrise-alarm/";
     static final String APP_HOST = "graemeblick-lang.github.io";
+    /** Don't show the crash report this close to an alarm: the alarm matters more. */
+    static final long QUIET_BEFORE_ALARM = 90 * 60_000;
 
     private WebView web;
     private NativeAudio audio;
     private SpotifyRemote spotify;
     private volatile boolean captureVolume = false;
-    private boolean pageLoaded = false, usingBundled = false, launchWake = false;
+    /** The host of the page that's showing; only our own page may use window.Android. */
+    private volatile String pageHost = "";
+    private boolean pageLoaded = false, usingBundled = false;
+    private long wakeAlarm = 0;   // the alarm this launch is for (0 = normal launch)
     private GeolocationPermissions.Callback geoCallback;
     private String geoOrigin;
 
@@ -52,12 +75,15 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle saved) {
         super.onCreate(saved);
         File crash = new File(getFilesDir(), App.CRASH_FILE);
-        if (crash.exists()) { showReport(crash); return; }
+        boolean alarmSoon = isWake(getIntent()) || AlarmScheduler.activeAlarm(this, QUIET_BEFORE_ALARM) > 0;
+        // The crash report waits for a normal daytime launch. It never stands between you and an alarm.
+        if (crash.exists() && !alarmSoon) { showReport(crash); return; }
         try {
             start();
         } catch (Throwable t) {
             App.save(this, "Starting up", t);
-            showReport(crash);
+            if (!alarmSoon) showReport(crash);
+            // If this was an alarm launch, the native backup alarm will still ring
         }
     }
 
@@ -71,17 +97,38 @@ public class MainActivity extends Activity {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         try { goFullscreen(); } catch (Exception ignored) { }
 
-        web = new WebView(this);
-        web.setBackgroundColor(0xFF000000);
-        audio = new NativeAudio(this, this::sendAudioEvent);
+        audio = new NativeAudio(this);
         PlaybackService.listener = this::sendAudioEvent;
         spotify = new SpotifyRemote(this::sendAudioEvent);
+
+        // A music fade that was cut short (app closed mid-alarm) left the media volume low: put it back
+        if (AlarmScheduler.activeAlarm(this, 0) == 0) audio.musicRestore();
+        // Make sure the system alarms match what's saved (cheap, and fixes anything Android dropped)
+        AlarmScheduler.reschedule(this);
+
+        try {
+            if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
+            }
+        } catch (Exception ignored) { }
+
+        wakeAlarm = wakeAlarmFor(getIntent());
+        buildWeb();
+        loadApp();
+        clearWakeNotifications();
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private void buildWeb() {
+        web = new WebView(this);
+        web.setBackgroundColor(0xFF000000);
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
-        s.setDatabaseEnabled(true);
         s.setGeolocationEnabled(true);
         s.setMediaPlaybackRequiresUserGesture(false);   // lets the alarm sound start on its own
+        s.setAllowFileAccess(false);                    // the page never needs the phone's files
+        s.setAllowContentAccess(false);
         web.addJavascriptInterface(new Bridge(), "Android");
 
         web.setWebViewClient(new WebViewClient() {
@@ -90,38 +137,49 @@ public class MainActivity extends Activity {
                 Uri u = req.getUrl();
                 String scheme = u.getScheme() == null ? "" : u.getScheme();
                 String host = u.getHost() == null ? "" : u.getHost();
-                boolean external = !(scheme.equals("http") || scheme.equals("https")) || host.endsWith("willyweather.com.au");
-                if (external) {
+                boolean web = scheme.equals("http") || scheme.equals("https");
+                // The app and the Spotify login stay inside; everything else opens in the browser
+                // (Spotify's own login pages may hop between its domains and Google/Apple/Facebook sign-in).
+                boolean inside = web && (host.equals(APP_HOST) || isLoginHost(host));
+                if (!inside) {
                     try { startActivity(new Intent(Intent.ACTION_VIEW, u)); } catch (Exception ignored) { }
                     return true;
                 }
-                return false;   // Spotify login and the app itself stay inside
+                return false;
             }
 
             @Override
-            public void onPageFinished(WebView view, String url) { pageLoaded = true; }
+            public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) { trackHost(url); }
+
+            @Override
+            public void doUpdateVisitedHistory(WebView view, String url, boolean isReload) { trackHost(url); }
+
+            @Override
+            public void onPageFinished(WebView view, String url) { trackHost(url); pageLoaded = true; }
 
             @Override
             public void onReceivedError(WebView view, WebResourceRequest req, android.webkit.WebResourceError err) {
-                if (req.isForMainFrame()) loadBundled();
+                if (req.isForMainFrame() && isAppUrl(req.getUrl())) loadBundled();
             }
 
             @Override
             public void onReceivedHttpError(WebView view, WebResourceRequest req, android.webkit.WebResourceResponse resp) {
-                if (req.isForMainFrame() && resp.getStatusCode() >= 400) loadBundled();
+                if (req.isForMainFrame() && isAppUrl(req.getUrl()) && resp.getStatusCode() >= 400) loadBundled();
             }
 
             @Override
             public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
-                // The page's engine stopped; restart cleanly instead of letting Android close the app
+                // The page's engine stopped (often low memory on old phones). Rebuild it in place and carry on,
+                // straight back into the alarm if one is due.
                 App.save(MainActivity.this, "WebView renderer stopped (crashed: " + detail.didCrash() + ")", new RuntimeException("Renderer gone"));
-                recreate();
+                rebuildWeb();
                 return true;
             }
         });
         web.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback cb) {
+                if (!APP_HOST.equals(Uri.parse(origin).getHost())) { cb.invoke(origin, false, false); return; }
                 if (checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
                     cb.invoke(origin, true, false);
                 } else {
@@ -130,40 +188,62 @@ public class MainActivity extends Activity {
                 }
             }
         });
-
         setContentView(web);
+    }
 
+    private void rebuildWeb() {
+        WebView old = web;
+        web = null;
         try {
-            if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
+            if (old != null) {
+                ((android.view.ViewGroup) old.getParent()).removeView(old);
+                old.destroy();
             }
         } catch (Exception ignored) { }
+        pageLoaded = false; usingBundled = false; pageHost = "";
+        wakeAlarm = 0;   // the page picks the alarm back up from its own saved state
+        try { buildWeb(); loadApp(); } catch (Throwable t) { App.save(this, "Rebuilding the page", t); }
+    }
 
-        launchWake = isWake(getIntent());
-        web.loadUrl(APP_URL + (launchWake ? "#wake" : ""));
+    /** At alarm time use the copy built into the app straight away; otherwise the website, with the copy as a fallback. */
+    private void loadApp() {
+        // Around alarm time don't wait on the internet
+        boolean alarmLaunch = wakeAlarm != 0 || AlarmScheduler.activeAlarm(this, 0) > 0;
+        if (alarmLaunch && hasBundled()) { loadBundled(); return; }
+        pageHost = APP_HOST;
+        web.loadUrl(APP_URL + hash());
         // If the website hasn't loaded within 10 s (no internet, GitHub down), use the copy built into the app
-        web.postDelayed(() -> { if (!pageLoaded) loadBundled(); }, 10000);
-        clearWakeNotification();
+        final WebView w = web;
+        web.postDelayed(() -> { if (w == web && !pageLoaded) loadBundled(); }, alarmLaunch ? 4000 : 10000);
+    }
+
+    private String hash() {
+        if (wakeAlarm == 0) return "";
+        return wakeAlarm > 0 ? "#wake=" + wakeAlarm : "#wake";
     }
 
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        setIntent(intent);
         if (web != null && isWake(intent)) {
-            web.evaluateJavascript("window.nativeWake && window.nativeWake()", null);
-            clearWakeNotification();
+            long ms = intent.getLongExtra(AlarmScheduler.EXTRA_ALARM, 0);
+            if (pageLoaded) web.evaluateJavascript("window.nativeWake && window.nativeWake(" + ms + ")", null);
+            else { wakeAlarm = ms > 0 ? ms : -1; }
+            clearWakeNotifications();
         }
     }
 
     private void sendAudioEvent(String ev) {
+        final String safe = ev.replaceAll("[^A-Za-z0-9:_-]", "");
         runOnUiThread(() -> {
-            if (web != null) web.evaluateJavascript("window.nativeAudioEvent && window.nativeAudioEvent('" + ev.replace("'", "") + "')", null);
+            if (web != null) web.evaluateJavascript("window.nativeAudioEvent && window.nativeAudioEvent('" + safe + "')", null);
         });
     }
 
     @Override
-    public boolean onKeyDown(int keyCode, android.view.KeyEvent event) {
-        boolean up = keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP, down = keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN;
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        boolean up = keyCode == KeyEvent.KEYCODE_VOLUME_UP, down = keyCode == KeyEvent.KEYCODE_VOLUME_DOWN;
         if (captureVolume && web != null && (up || down)) {
             web.evaluateJavascript("window.nativeVolumeKey && window.nativeVolumeKey('" + (up ? "up" : "down") + "')", null);
             return true;
@@ -172,16 +252,17 @@ public class MainActivity extends Activity {
     }
 
     @Override
-    public boolean onKeyUp(int keyCode, android.view.KeyEvent event) {
-        if (captureVolume && (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP || keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN)) return true;
+    public boolean onKeyUp(int keyCode, KeyEvent event) {
+        if (captureVolume && (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN)) return true;
         return super.onKeyUp(keyCode, event);
     }
 
     @Override
     protected void onDestroy() {
-        if (audio != null) { audio.radioStop(); audio.musicRestore(); }
+        if (audio != null && AlarmScheduler.activeAlarm(this, 0) == 0) audio.musicRestore();
         if (spotify != null) spotify.disconnect();
         PlaybackService.listener = null;
+        if (web != null) { try { web.destroy(); } catch (Exception ignored) { } web = null; }
         super.onDestroy();
     }
 
@@ -191,7 +272,7 @@ public class MainActivity extends Activity {
     /** Shows what went wrong last time, with a button to copy it. */
     private void showReport(File crash) {
         String text;
-        try { text = new String(Files.readAllBytes(crash.toPath())); } catch (Exception e) { text = "Couldn't read the crash details: " + e; }
+        try { text = new String(Files.readAllBytes(crash.toPath()), StandardCharsets.UTF_8); } catch (Exception e) { text = "Couldn't read the crash details: " + e; }
         final String report = text;
 
         LinearLayout box = new LinearLayout(this);
@@ -207,10 +288,10 @@ public class MainActivity extends Activity {
         LinearLayout buttons = new LinearLayout(this);
         Button copy = new Button(this); copy.setText("Copy");
         copy.setOnClickListener(v -> {
-            ((ClipboardManager) getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("Sunrise crash", report));
+            getSystemService(ClipboardManager.class).setPrimaryClip(ClipData.newPlainText("Sunrise crash", report));
             copy.setText("Copied ✓");
         });
-        Button cont = new Button(this); cont.setText("Try again");
+        Button cont = new Button(this); cont.setText("Continue");
         cont.setOnClickListener(v -> { crash.delete(); recreate(); });
         buttons.addView(copy); buttons.addView(cont);
         box.addView(buttons);
@@ -238,25 +319,58 @@ public class MainActivity extends Activity {
         }
     }
 
+    private boolean hasBundled() {
+        try {
+            String[] files = getAssets().list("www");
+            return files != null && Arrays.asList(files).contains("index.html");
+        } catch (Exception e) { return false; }
+    }
+
     /** Show the copy of the app that's built into the APK, on the same web address so settings are kept. */
     private void loadBundled() {
-        if (usingBundled || web == null) return;
+        if (usingBundled || web == null || !hasBundled()) return;
         usingBundled = true;
-        try (java.io.InputStream in = getAssets().open("www/index.html")) {
-            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        try (InputStream in = getAssets().open("www/index.html")) {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
             byte[] buf = new byte[16384]; int n;
             while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
-            String html = new String(out.toByteArray(), java.nio.charset.StandardCharsets.UTF_8);
-            web.loadDataWithBaseURL(APP_URL + (launchWake ? "#wake" : ""), html, "text/html", "utf-8", null);
+            String html = new String(out.toByteArray(), StandardCharsets.UTF_8);
+            pageHost = APP_HOST;
+            web.loadDataWithBaseURL(APP_URL + hash(), html, "text/html", "utf-8", null);
         } catch (Exception e) {
+            usingBundled = false;
             App.save(this, "Loading the built-in copy", e);
+            web.loadUrl(APP_URL + hash());
         }
+    }
+
+    private void trackHost(String url) {
+        if (url == null) return;
+        if (url.startsWith("data:") || url.startsWith("about:")) return;   // the built-in copy reports its base URL separately
+        String h = Uri.parse(url).getHost();
+        pageHost = h == null ? "" : h;
+    }
+
+    private static boolean isAppUrl(Uri u) { return u != null && APP_HOST.equals(u.getHost()); }
+
+    private static boolean isLoginHost(String h) {
+        return h.equals("spotify.com") || h.endsWith(".spotify.com") || h.equals("accounts.google.com")
+                || h.equals("appleid.apple.com") || h.endsWith(".facebook.com");
     }
 
     private boolean isWake(Intent i) { return i != null && i.getBooleanExtra("wake", false); }
 
-    private void clearWakeNotification() {
-        ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).cancel(AlarmReceiver.NOTIF_ID);
+    /** The alarm time this launch is for: from the intent, or -1 if it's a wake without one, else 0. */
+    private long wakeAlarmFor(Intent i) {
+        if (!isWake(i)) return 0;
+        long ms = i.getLongExtra(AlarmScheduler.EXTRA_ALARM, 0);
+        return ms > 0 ? ms : -1;
+    }
+
+    private void clearWakeNotifications() {
+        NotificationManager nm = getSystemService(NotificationManager.class);
+        nm.cancel(AlarmReceiver.NOTIF_ID);
+        nm.cancel(AlarmReceiver.BACKUP_NOTIF_ID);
     }
 
     private void goFullscreen() {
@@ -272,87 +386,118 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** Functions the web page can call as window.Android.* */
+    /**
+     * Functions the web page can call as window.Android.*
+     * Every call checks it's coming from our own page, so a login page or any other site the app
+     * shows can't set alarms, play things or read the list of installed apps.
+     */
     class Bridge {
+        private boolean ok() { return APP_HOST.equals(pageHost); }
+
+        // ----- alarms -----
+        /** The next few alarms as JSON [[sunriseMs, alarmMs], ...]. "[]" turns automatic opening off. */
+        @JavascriptInterface public void schedulePlan(String json) {
+            if (!ok()) return;
+            try { AlarmScheduler.setPlan(MainActivity.this, json); }
+            catch (Throwable t) { App.save(MainActivity.this, "Scheduling alarms", t); }
+        }
         @JavascriptInterface public void schedule(double sunriseMs, double alarmMs) {
+            if (!ok()) return;
             try { AlarmScheduler.schedule(MainActivity.this, (long) sunriseMs, (long) alarmMs); }
             catch (Throwable t) { App.save(MainActivity.this, "Scheduling the alarm", t); }
+        }
+        @JavascriptInterface public void cancel() {
+            if (!ok()) return;
+            try { AlarmScheduler.cancel(MainActivity.this); } catch (Throwable t) { App.save(MainActivity.this, "Cancelling the alarm", t); }
+        }
+        /** A native backup for an alarm the page is handling (Goodnight, snooze). */
+        @JavascriptInterface public void armBackup(double alarmMs) {
+            if (!ok()) return;
+            try { AlarmScheduler.armBackup(MainActivity.this, (long) alarmMs); } catch (Throwable t) { App.save(MainActivity.this, "Setting the backup alarm", t); }
+        }
+        @JavascriptInterface public void cancelBackup() {
+            if (!ok()) return;
+            try { AlarmScheduler.cancelBackup(MainActivity.this); } catch (Throwable t) { App.save(MainActivity.this, "Clearing the backup alarm", t); }
+        }
+        /** The page is ringing: the native backup can stand down. */
+        @JavascriptInterface public void alarmRinging() {
+            if (!ok()) return;
+            AlarmScheduler.markRinging(MainActivity.this);
+            runOnUiThread(() -> PlaybackService.stopBackup(MainActivity.this));
         }
 
         /** The phone's Material You colours (from the wallpaper), Android 12 and later. */
         @JavascriptInterface public String systemColors() {
-            if (Build.VERSION.SDK_INT < 31) return "";
+            if (!ok() || Build.VERSION.SDK_INT < 31) return "";
             int[] ids = { android.R.color.system_accent1_100, android.R.color.system_accent1_200, android.R.color.system_accent1_300,
                     android.R.color.system_accent1_500, android.R.color.system_accent1_700, android.R.color.system_accent1_800,
                     android.R.color.system_accent1_900, android.R.color.system_accent2_700, android.R.color.system_neutral1_900 };
             String[] names = { "a1_100", "a1_200", "a1_300", "a1_500", "a1_700", "a1_800", "a1_900", "a2_700", "n1_900" };
-            StringBuilder sb = new StringBuilder("{");
-            for (int i = 0; i < ids.length; i++) {
-                if (i > 0) sb.append(',');
-                sb.append('"').append(names[i]).append("\":\"").append(String.format("#%06x", 0xFFFFFF & getColor(ids[i]))).append('"');
-            }
-            return sb.append('}').toString();
+            try {
+                JSONObject o = new JSONObject();
+                for (int i = 0; i < ids.length; i++) o.put(names[i], String.format("#%06x", 0xFFFFFF & getColor(ids[i])));
+                return o.toString();
+            } catch (Exception e) { return ""; }
         }
 
         // ----- any music app -----
         /** Installed apps that accept play/pause buttons, as JSON [{pkg,label}]. */
         @JavascriptInterface public String listMusicApps() {
-            android.content.pm.PackageManager pm = getPackageManager();
-            java.util.List<android.content.pm.ResolveInfo> found = pm.queryBroadcastReceivers(new Intent(Intent.ACTION_MEDIA_BUTTON), 0);
-            java.util.LinkedHashMap<String, String> apps = new java.util.LinkedHashMap<>();
-            for (android.content.pm.ResolveInfo r : found) {
+            if (!ok()) return "[]";
+            PackageManager pm = getPackageManager();
+            List<ResolveInfo> found = pm.queryBroadcastReceivers(new Intent(Intent.ACTION_MEDIA_BUTTON), 0);
+            Map<String, String> apps = new LinkedHashMap<>();
+            for (ResolveInfo r : found) {
                 String pkg = r.activityInfo.packageName;
                 if (pkg.equals(getPackageName()) || apps.containsKey(pkg)) continue;
                 try { apps.put(pkg, pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()); } catch (Exception ignored) { }
             }
-            StringBuilder sb = new StringBuilder("[");
-            for (java.util.Map.Entry<String, String> e : apps.entrySet()) {
-                if (sb.length() > 1) sb.append(',');
-                sb.append("{\"pkg\":\"").append(e.getKey()).append("\",\"label\":\"").append(e.getValue().replace("\"", "")).append("\"}");
-            }
-            return sb.append(']').toString();
+            JSONArray arr = new JSONArray();
+            try {
+                for (Map.Entry<String, String> e : apps.entrySet()) arr.put(new JSONObject().put("pkg", e.getKey()).put("label", e.getValue()));
+            } catch (Exception ignored) { }
+            return arr.toString();
         }
-        @JavascriptInterface public boolean appWake(String pkg) { audio.musicFadeStart(); return audio.appKey(pkg, android.view.KeyEvent.KEYCODE_MEDIA_PLAY); }
-        @JavascriptInterface public void appPause(String pkg) { audio.appKey(pkg, android.view.KeyEvent.KEYCODE_MEDIA_PAUSE); }
-        @JavascriptInterface public void musicFadeStart() { audio.musicFadeStart(); }
+        @JavascriptInterface public boolean appWake(String pkg) { if (!ok()) return false; audio.musicFadeStart(); return audio.appKey(pkg, KeyEvent.KEYCODE_MEDIA_PLAY); }
+        @JavascriptInterface public void appPause(String pkg) { if (ok()) audio.appKey(pkg, KeyEvent.KEYCODE_MEDIA_PAUSE); }
+        @JavascriptInterface public void musicFadeStart() { if (ok()) audio.musicFadeStart(); }
 
         // ----- Spotify app (official App Remote SDK) -----
         @JavascriptInterface public void spotifyRemoteAuth(String clientId) {
-            runOnUiThread(() -> spotify.connect(getApplicationContext(), clientId, true, null, false));
+            if (ok()) runOnUiThread(() -> spotify.connect(getApplicationContext(), clientId, true, null, false));
         }
         @JavascriptInterface public void spotifyRemote(String clientId, String uri, boolean shuffle) {
-            runOnUiThread(() -> spotify.connect(getApplicationContext(), clientId, false, uri, shuffle));
+            if (ok()) runOnUiThread(() -> spotify.connect(getApplicationContext(), clientId, false, uri, shuffle));
         }
-        @JavascriptInterface public void spotifyRemotePause() { runOnUiThread(() -> spotify.pause()); }
+        @JavascriptInterface public void spotifyRemotePause() { if (ok()) runOnUiThread(() -> spotify.pause()); }
 
         /** While the alarm's music plays, the phone's volume buttons control it. */
-        @JavascriptInterface public void captureVolumeKeys(boolean on) { captureVolume = on; }
+        @JavascriptInterface public void captureVolumeKeys(boolean on) { captureVolume = on && ok(); }
 
-        // ----- audio -----
-        // Radio plays in a background media service, so it keeps going if you switch apps
+        // ----- radio (plays in a background media service, so it keeps going if you switch apps) -----
         @JavascriptInterface public boolean radioService() { return true; }
         @JavascriptInterface public void radioPlay(String url, double volume) { radioPlay(url, volume, "Radio"); }
         @JavascriptInterface public void radioPlay(String url, double volume, String title) {
+            if (!ok() || url == null || !(url.startsWith("http://") || url.startsWith("https://"))) return;
             runOnUiThread(() -> PlaybackService.play(MainActivity.this, url, title, (float) volume));
         }
-        @JavascriptInterface public void radioVolume(double v) { runOnUiThread(() -> PlaybackService.setVolume(MainActivity.this, (float) v)); }
-        @JavascriptInterface public void radioStop() { runOnUiThread(() -> PlaybackService.stop(MainActivity.this)); }
+        @JavascriptInterface public void radioVolume(double v) { if (ok()) runOnUiThread(() -> PlaybackService.setVolume(MainActivity.this, (float) v)); }
+        @JavascriptInterface public void radioStop() { if (ok()) runOnUiThread(() -> PlaybackService.stop(MainActivity.this)); }
+
+        // ----- Spotify by media button, and media volume -----
         /** Turns media volume down, then presses play in Spotify so it wakes up. */
-        @JavascriptInterface public boolean spotifyWake() { audio.musicFadeStart(); return audio.spotifyKey(android.view.KeyEvent.KEYCODE_MEDIA_PLAY); }
-        @JavascriptInterface public void spotifyPause() { audio.spotifyKey(android.view.KeyEvent.KEYCODE_MEDIA_PAUSE); }
-        @JavascriptInterface public void musicVolume(double f) { audio.setMusic((float) f); }
-        @JavascriptInterface public void musicRestore() { audio.musicRestore(); }
+        @JavascriptInterface public boolean spotifyWake() { if (!ok()) return false; audio.musicFadeStart(); return audio.spotifyKey(KeyEvent.KEYCODE_MEDIA_PLAY); }
+        @JavascriptInterface public void spotifyPause() { if (ok()) audio.spotifyKey(KeyEvent.KEYCODE_MEDIA_PAUSE); }
+        @JavascriptInterface public void musicVolume(double f) { if (ok()) audio.setMusic((float) f); }
+        @JavascriptInterface public void musicRestore() { if (ok()) audio.musicRestore(); }
         /** True if any app is playing audio right now (used to check Spotify really started). */
         @JavascriptInterface public boolean musicActive() {
-            return ((android.media.AudioManager) getSystemService(AUDIO_SERVICE)).isMusicActive();
-        }
-
-        @JavascriptInterface public void cancel() {
-            try { AlarmScheduler.cancel(MainActivity.this); } catch (Throwable t) { App.save(MainActivity.this, "Cancelling the alarm", t); }
+            return ok() && getSystemService(AudioManager.class).isMusicActive();
         }
 
         /** 0..1 sets the screen brightness for this app; below 0 hands control back to the phone. */
         @JavascriptInterface public void setBrightness(final float v) {
+            if (!ok()) return;
             runOnUiThread(() -> {
                 WindowManager.LayoutParams lp = getWindow().getAttributes();
                 lp.screenBrightness = v < 0 ? WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE : Math.max(0.002f, Math.min(1f, v));
@@ -360,24 +505,35 @@ public class MainActivity extends Activity {
             });
         }
 
-        /** Comma-separated list of settings that would stop the app opening itself. */
+        /** Comma-separated list of settings that would stop the alarm working properly. */
         @JavascriptInterface public String problems() {
             StringBuilder sb = new StringBuilder();
-            NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            NotificationManager nm = getSystemService(NotificationManager.class);
             if (!nm.areNotificationsEnabled()) sb.append("notifications,");
             if (Build.VERSION.SDK_INT >= 34 && !nm.canUseFullScreenIntent()) sb.append("fullscreen,");
+            if (Build.VERSION.SDK_INT >= 31 && !getSystemService(AlarmManager.class).canScheduleExactAlarms()) sb.append("exact,");
+            if (!getSystemService(PowerManager.class).isIgnoringBatteryOptimizations(getPackageName())) sb.append("battery,");
             return sb.toString();
         }
 
+        /** True when the app has the native backup alarm (so the page can say so). */
+        @JavascriptInterface public boolean hasBackupAlarm() { return true; }
+
         @JavascriptInterface public void fix(String what) {
+            if (!ok()) return;
             Intent i;
+            Uri pkg = Uri.parse("package:" + getPackageName());
             if ("fullscreen".equals(what) && Build.VERSION.SDK_INT >= 34) {
-                i = new Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.parse("package:" + getPackageName()));
+                i = new Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, pkg);
+            } else if ("exact".equals(what) && Build.VERSION.SDK_INT >= 31) {
+                i = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, pkg);
+            } else if ("battery".equals(what)) {
+                i = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkg);
             } else {
                 i = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName());
             }
             try { startActivity(i); } catch (Exception e) {
-                startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName())));
+                try { startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg)); } catch (Exception ignored) { }
             }
         }
     }

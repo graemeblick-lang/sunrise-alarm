@@ -2,71 +2,33 @@ package au.sunrise.alarm;
 
 import android.content.Context;
 import android.content.Intent;
-import android.media.AudioAttributes;
+import android.content.SharedPreferences;
 import android.media.AudioManager;
-import android.media.MediaPlayer;
 import android.os.SystemClock;
 import android.view.KeyEvent;
 
 /**
- * Audio the in-app browser can't do well:
- *  - radio streams (including the ABC's HLS streams) through Android's own player, on the alarm channel
- *  - waking the Spotify app and controlling the phone's media volume for a gentle fade-in
+ * Media-app control the in-app browser can't do:
+ * waking Spotify (or another music app) and controlling the phone's media volume for a gentle fade-in.
+ * (Radio lives in PlaybackService.)
  */
 final class NativeAudio {
-    interface Events { void send(String event); }
-
     private final Context ctx;
-    private final Events events;
     private final AudioManager am;
-    private MediaPlayer radio;
-    private float radioVol = 0.05f;
-    private int savedMusicVol = -1;
+    private final SharedPreferences prefs;
 
-    NativeAudio(Context c, Events e) {
-        ctx = c; events = e;
+    NativeAudio(Context c) {
+        ctx = c;
         am = (AudioManager) c.getSystemService(Context.AUDIO_SERVICE);
+        prefs = c.getSharedPreferences(AlarmScheduler.PREFS, 0);
     }
 
-    // ---------- Radio ----------
-    void radioPlay(String url, float volume) {
-        radioStop();
-        radioVol = clamp(volume);
-        try {
-            MediaPlayer mp = new MediaPlayer();
-            radio = mp;
-            mp.setAudioAttributes(new AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ALARM)            // plays at alarm volume, even in Do Not Disturb
-                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                    .build());
-            mp.setDataSource(url);
-            mp.setVolume(radioVol, radioVol);
-            mp.setOnPreparedListener(p -> { if (p == radio) { p.start(); events.send("playing"); } });
-            mp.setOnErrorListener((p, what, extra) -> { if (p == radio) events.send("error"); return true; });
-            mp.setOnCompletionListener(p -> { if (p == radio) events.send("ended"); });
-            mp.prepareAsync();
-        } catch (Exception ex) {
-            events.send("error");
-        }
-    }
-
-    void radioVolume(float v) {
-        radioVol = clamp(v);
-        try { if (radio != null) radio.setVolume(radioVol, radioVol); } catch (Exception ignored) { }
-    }
-
-    void radioStop() {
-        MediaPlayer mp = radio;
-        radio = null;
-        if (mp != null) { try { mp.stop(); } catch (Exception ignored) { } try { mp.release(); } catch (Exception ignored) { } }
-    }
-
-    // ---------- Spotify ----------
     /** Sends a "play" button press straight to Spotify (not to whatever app played last, like YouTube). */
     boolean spotifyKey(int keyCode) { return appKey("com.spotify.music", keyCode); }
 
     /** Sends a media button press to one specific app (e.g. YouTube Music), not whichever app played last. */
     boolean appKey(String pkg, int keyCode) {
+        if (pkg == null || pkg.isEmpty()) return false;
         try {
             ctx.getPackageManager().getPackageInfo(pkg, 0);
         } catch (Exception notInstalled) { return false; }
@@ -80,10 +42,15 @@ final class NativeAudio {
         return true;
     }
 
-    // ---------- Media volume, for fading Spotify in ----------
-    /** Remember the current media volume and drop it low before music starts. */
+    // ---------- Media volume, for fading music apps in ----------
+    /**
+     * Remember the current media volume and drop it low before music starts.
+     * The saved volume is kept on disk, so it's put back even if the app was closed mid-fade.
+     */
     void musicFadeStart() {
-        if (savedMusicVol < 0) savedMusicVol = am.getStreamVolume(AudioManager.STREAM_MUSIC);
+        if (prefs.getInt("savedMusicVol", -1) < 0) {
+            prefs.edit().putInt("savedMusicVol", am.getStreamVolume(AudioManager.STREAM_MUSIC)).apply();
+        }
         setMusic(0.07f);
     }
 
@@ -97,9 +64,10 @@ final class NativeAudio {
 
     /** Put the media volume back the way it was. */
     void musicRestore() {
-        if (savedMusicVol >= 0) {
-            try { am.setStreamVolume(AudioManager.STREAM_MUSIC, savedMusicVol, 0); } catch (Exception ignored) { }
-            savedMusicVol = -1;
+        int saved = prefs.getInt("savedMusicVol", -1);
+        if (saved >= 0) {
+            try { am.setStreamVolume(AudioManager.STREAM_MUSIC, saved, 0); } catch (Exception ignored) { }
+            prefs.edit().remove("savedMusicVol").apply();
         }
     }
 
