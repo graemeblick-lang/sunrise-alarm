@@ -5,7 +5,7 @@ A sunrise wake-up light and alarm for an old phone on a bedside stand.
 - Sunrise glow on the screen before the alarm
 - Wake to Spotify, internet radio, another music app or gentle chimes
 - Quick one-off alarms (in 5, 10, 20 or 30 minutes, or at a time you pick)
-- Morning screen with weather (Open-Meteo, including the chance of rain through the day), a link to the BOM forecast, daylight times and Todoist tasks
+- Morning screen with weather (Open-Meteo, including the chance of rain through the day), a button for the BOM Weather app, daylight times and Todoist tasks
 
 Open https://graemeblick-lang.github.io/sunrise-alarm/ in Chrome on Android, then ⋮ → Add to home screen → Install.
 

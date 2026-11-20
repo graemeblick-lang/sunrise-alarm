@@ -328,7 +328,11 @@ private fun MorningView(a: AlarmFlowActivity, theme: FullTheme) {
                 }
             }
             Button(
-                onClick = { openWeather(context, m.weatherLink) },            ) { Text(MorningSettings.linkLabel(m.weatherLink), fontSize = 16.sp) }
+                onClick = { openBom(context) },
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.7f), contentColor = rgb(theme.v("mBtn"))),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+            ) { Text("Open BOM Weather ↗", fontSize = 16.sp) }
 
             Card(theme, "Daylight") {
                 val sun = SunTimes.of(LocalDate.now(), m.lat, m.lon)
@@ -386,13 +390,10 @@ private fun Card(theme: FullTheme, title: String, content: @Composable ColumnSco
     }
 }
 
-/** Your saved BOM/WillyWeather page; with none, the BOM Weather app if it's installed, otherwise bom.gov.au. */
-private fun openWeather(context: android.content.Context, link: String) {
-    val i = when {
-        MorningSettings.linkOk(link) -> Intent(Intent.ACTION_VIEW, Uri.parse(link))
-        else -> context.packageManager.getLaunchIntentForPackage(MorningSettings.BOM_APP)
-            ?: Intent(Intent.ACTION_VIEW, Uri.parse(MorningSettings.BOM_SITE))
-    }
+/** The BOM Weather app (radar, warnings) if it's installed, otherwise bom.gov.au. */
+private fun openBom(context: android.content.Context) {
+    val i = context.packageManager.getLaunchIntentForPackage(MorningSettings.BOM_APP)
+        ?: Intent(Intent.ACTION_VIEW, Uri.parse(MorningSettings.BOM_SITE))
     runCatching { context.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
 }
 
