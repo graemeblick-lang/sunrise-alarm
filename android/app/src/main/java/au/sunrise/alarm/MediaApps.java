@@ -41,6 +41,20 @@ final class MediaApps {
         this.audio = audio;
     }
 
+    /** Installed apps that accept play/pause buttons, as [package, name] pairs (not Sunrise itself). */
+    static java.util.List<String[]> list(Context c) {
+        android.content.pm.PackageManager pm = c.getPackageManager();
+        java.util.LinkedHashMap<String, String> apps = new java.util.LinkedHashMap<>();
+        for (ResolveInfo r : pm.queryBroadcastReceivers(new Intent(Intent.ACTION_MEDIA_BUTTON), 0)) {
+            String pkg = r.activityInfo.packageName;
+            if (pkg.equals(c.getPackageName()) || apps.containsKey(pkg)) continue;
+            try { apps.put(pkg, pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()); } catch (Exception ignored) { }
+        }
+        java.util.List<String[]> out = new java.util.ArrayList<>();
+        for (java.util.Map.Entry<String, String> e : apps.entrySet()) out.add(new String[]{ e.getKey(), e.getValue() });
+        return out;
+    }
+
     boolean installed(String pkg) {
         try { ctx.getPackageManager().getPackageInfo(pkg, 0); return true; } catch (Exception e) { return false; }
     }

@@ -862,7 +862,7 @@
   function goPage(name, push){
     if (!PAGES.includes(name)) name = "main";
     // Pages rebuilt as native Android screens open there instead
-    if (["alarm","look","morning"].includes(name) && NATIVE && typeof NATIVE.openSettings === "function"){
+    if (["alarm","look","morning","sound","stations"].includes(name) && NATIVE && typeof NATIVE.openSettings === "function"){
       try { if (NATIVE.openSettings(name)) return; } catch(e){}
     }
     if (name !== "stations" && typeof stopPreview === "function") stopPreview();
@@ -890,7 +890,7 @@
     const paused = S.pauseUntil && S.pauseUntil >= new Date().toLocaleDateString("en-CA");
     $("sumAlarm").textContent = (paused ? "Paused · " : "") + daysText() + (S.perDay ? " (own times)" : "") + ` · sunrise ${S.dur} min · snooze ${S.snooze} min`;
     const st = curStation()[0].replace("…","");
-    const src = S.src==="radio" ? "📻 " + st : S.src==="songs" ? "♪ Your songs" :
+    const src = S.src==="radio" ? "📻 " + st : S.src==="songs" ? "♪ Your songs" + ((S.songs||[]).length ? ` (${S.songs.length})` : "") :
                 S.src==="spotify" ? ("Spotify" + (S.spAppOk && SP.parseLink(S.spLink) ? ` · ${S.spName || "your playlist"}` : " · what you last played")) :
                 S.src==="apps" ? "🎵 " + (S.appName || "Choose a music app") : "Chimes";
     $("sumSound").textContent = `${src} · fade ${S.fade} min` + (S.earlyMin && S.src!=="chimes" ? ` · starts ${S.earlyMin} min early` : "");
@@ -1199,14 +1199,17 @@
   window.nativeAudioEvent = ev => {
     if (ev.startsWith("focus:")){ onFocusEvent(ev); return; }
     if (ev.startsWith("sr:")){ handleSr(ev); return; }
+    // Native songs: which one is playing now (an index into S.songs)
+    if (ev.startsWith("song:")){ const s = (S.songs||[])[+ev.slice(5)]; if (s && using === "songs") $("rNow").textContent = "♪ " + s.name.replace(/\.[^.]+$/,""); return; }
     if (nativeWaiter){ const w = nativeWaiter; nativeWaiter = null; ev === "playing" ? w.resolve() : w.reject(ev); return; }
-    if (ev === "stopped" && nativeRadioOn && using === "radio"){
+    if (ev === "stopped" && nativeRadioOn && (using === "radio" || using === "songs")){
       // Stop pressed in the notification, on the lock screen or on headphones
       nativeRadioOn = false;
       if (mode === "ring") enterMorning(false); else { stopSound(); if (mode === "morning") paintMorningMusic(); else if (mode === "night"){ earlyPlay = false; earlyStopped = true; } }
       return;
     }
     if (nativeRadioOn && using === "radio" && (ev === "error" || ev === "ended")) fallBack(`${curStation()[0]} dropped out, so playing chimes`);
+    if (nativeRadioOn && using === "songs" && ev === "error") fallBack("Your songs couldn't play, so playing chimes");
   };
   function tryNative(u){
     return new Promise((resolve, reject) => {
@@ -1275,7 +1278,24 @@
     $("rNow").textContent = "♪ " + s.name.replace(/\.[^.]+$/,"");
     try { await player.play(); } catch(e){ fallBack("Couldn't play your songs, so playing chimes"); }
   }
-  async function startSongs(){ using = "songs"; holdFocus(true); player.volume = 0.05; songQueue = []; await playNextSong(); }
+  // Android app: songs chosen with Android's file picker, played by the app's own player (fade, lock-screen controls)
+  const nativeSongs = () => !!(NATIVE && typeof NATIVE.songsPlay === "function" && (S.songs||[]).length);
+  async function startSongs(){
+    using = "songs"; songQueue = [];
+    if (nativeSongs()){
+      $("rNow").textContent = "♪ Your songs";
+      try {
+        await new Promise((resolve, reject) => {
+          const t = setTimeout(()=>{ nativeWaiter = null; reject("timeout"); }, 15000);
+          nativeWaiter = { resolve: ()=>{ clearTimeout(t); nativeRadioOn = true; resolve(); }, reject: why=>{ clearTimeout(t); reject(why); } };
+          let ok = false; try { ok = NATIVE.songsPlay(0.05); } catch(e){}
+          if (!ok){ clearTimeout(t); nativeWaiter = null; reject("native"); }
+        });
+      } catch(e){ if (using === "songs") fallBack("Couldn't play your songs, so playing chimes"); }
+      return;
+    }
+    holdFocus(true); player.volume = 0.05; await playNextSong();
+  }
 
   const NATIVE_SP = !!(NATIVE && typeof NATIVE.spotifyWake === "function");
   let spNativeFade = false;
@@ -1406,7 +1426,7 @@
     curVol = v;
     if (using==="chimes"){ if (master && ac) master.gain.setTargetAtTime(v, ac.currentTime, 0.5); }
     else if ((using==="spotify" || using==="app") && spNativeFade){ try { NATIVE.musicVolume(Math.max(0.07, v)); } catch(e){} }
-    else if (using==="radio" && NATIVE_RADIO){ try { NATIVE.radioVolume(v); } catch(e){} }
+    else if ((using==="radio" && NATIVE_RADIO) || (using==="songs" && nativeRadioOn)){ try { NATIVE.radioVolume(v); } catch(e){} }
     else if (using==="radio" || using==="songs") player.volume = Math.max(0, Math.min(1, v));
   }
 

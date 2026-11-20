@@ -496,17 +496,9 @@ public class MainActivity extends Activity {
         /** Installed apps that accept play/pause buttons, as JSON [{pkg,label}]. */
         @JavascriptInterface public String listMusicApps() {
             if (!ok()) return "[]";
-            PackageManager pm = getPackageManager();
-            List<ResolveInfo> found = pm.queryBroadcastReceivers(new Intent(Intent.ACTION_MEDIA_BUTTON), 0);
-            Map<String, String> apps = new LinkedHashMap<>();
-            for (ResolveInfo r : found) {
-                String pkg = r.activityInfo.packageName;
-                if (pkg.equals(getPackageName()) || apps.containsKey(pkg)) continue;
-                try { apps.put(pkg, pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()); } catch (Exception ignored) { }
-            }
             JSONArray arr = new JSONArray();
             try {
-                for (Map.Entry<String, String> e : apps.entrySet()) arr.put(new JSONObject().put("pkg", e.getKey()).put("label", e.getValue()));
+                for (String[] a : MediaApps.list(MainActivity.this)) arr.put(new JSONObject().put("pkg", a[0]).put("label", a[1]));
             } catch (Exception ignored) { }
             return arr.toString();
         }
@@ -547,6 +539,21 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void radioPlay(String url, double volume, String title) {
             if (!ok() || url == null || !(url.startsWith("http://") || url.startsWith("https://"))) return;
             runOnUiThread(() -> PlaybackService.play(MainActivity.this, url, title, (float) volume));
+        }
+        /** Your songs (chosen on the native Wake-up sound screen), shuffled, through the same player as the radio. */
+        @JavascriptInterface public boolean songsPlay(double volume) {
+            if (!ok()) return false;
+            java.util.ArrayList<String> uris = new java.util.ArrayList<>(), names = new java.util.ArrayList<>();
+            JSONArray a = SettingsStore.read(MainActivity.this).optJSONArray("songs");
+            for (int i = 0; a != null && i < a.length(); i++) {
+                JSONObject o = a.optJSONObject(i);
+                String u = o == null ? null : o.optString("uri", null);
+                if (u == null || !u.startsWith("content://")) continue;
+                uris.add(u); names.add(o.optString("name", "Your songs"));
+            }
+            if (uris.isEmpty()) return false;
+            runOnUiThread(() -> PlaybackService.playSongs(MainActivity.this, uris, names, (float) volume));
+            return true;
         }
         @JavascriptInterface public void radioVolume(double v) { if (ok()) runOnUiThread(() -> PlaybackService.setVolume(MainActivity.this, (float) v)); }
         @JavascriptInterface public void radioStop() { if (ok()) runOnUiThread(() -> PlaybackService.stop(MainActivity.this)); }

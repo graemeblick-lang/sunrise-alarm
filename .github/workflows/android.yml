@@ -27,6 +27,8 @@ jobs:
           # Run in two time zones, one with daylight saving, to catch date maths mistakes
           TZ=Australia/Melbourne node tests/schedule.test.js
           TZ=UTC node tests/schedule.test.js
+          # The native Wake-up sound screen's copy of the built-in stations must match the page's
+          node tests/stations.test.js
 
       - uses: actions/setup-java@v4
         with:

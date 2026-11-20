@@ -32,6 +32,7 @@ import android.os.PowerManager;
  */
 public class PlaybackService extends Service {
     static final String ACTION_PLAY = "au.sunrise.alarm.PLAY";
+    static final String ACTION_PLAY_SONGS = "au.sunrise.alarm.PLAY_SONGS";
     static final String ACTION_BACKUP = "au.sunrise.alarm.BACKUP_RING";
     static final String ACTION_VOLUME = "au.sunrise.alarm.VOLUME";
     static final String ACTION_STOP = "au.sunrise.alarm.STOP";
@@ -49,6 +50,11 @@ public class PlaybackService extends Service {
     private float volume = 0.05f;
     private String title = "Radio";
     private boolean backupMode = false;
+    // Your songs: shuffled playlist (uris and names in play order), and how many failed in a row
+    private java.util.List<Uri> songUris = null;
+    private java.util.List<String> songNames = null;
+    private int songIndex = 0, songFailures = 0;
+    private boolean songStarted = false;
     private long backupStarted = 0, backupAlarm = 0;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private AudioFocusRequest focusReq;
@@ -57,6 +63,12 @@ public class PlaybackService extends Service {
     private boolean pausedForFocus = false;
 
     // ---------- called from the app ----------
+    /** Your songs (content:// uris from Android's file picker), shuffled, one after another. */
+    static void playSongs(Context c, java.util.ArrayList<String> uris, java.util.ArrayList<String> names, float volume) {
+        c.startForegroundService(new Intent(c, PlaybackService.class).setAction(ACTION_PLAY_SONGS)
+                .putStringArrayListExtra("uris", uris).putStringArrayListExtra("names", names).putExtra("volume", volume));
+    }
+
     static void play(Context c, String url, String title, float volume) {
         Intent i = new Intent(c, PlaybackService.class).setAction(ACTION_PLAY)
                 .putExtra("url", url).putExtra("title", title).putExtra("volume", volume);
@@ -101,7 +113,26 @@ public class PlaybackService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         String action = intent == null ? null : intent.getAction();
         try {
-            if (ACTION_PLAY.equals(action)) {
+            if (ACTION_PLAY_SONGS.equals(action)) {
+                stopBackupTimers();
+                backupMode = false;
+                java.util.ArrayList<String> uris = intent.getStringArrayListExtra("uris");
+                java.util.ArrayList<String> names = intent.getStringArrayListExtra("names");
+                if (uris == null || uris.isEmpty()) { send("error"); shutdown(); return START_NOT_STICKY; }
+                // Shuffle together so names stay with their songs
+                java.util.List<Integer> order = new java.util.ArrayList<>();
+                for (int i = 0; i < uris.size(); i++) order.add(i);
+                java.util.Collections.shuffle(order);
+                songUris = new java.util.ArrayList<>(); songNames = new java.util.ArrayList<>();
+                for (int i : order) {
+                    songUris.add(Uri.parse(uris.get(i)));
+                    songNames.add(names != null && i < names.size() ? names.get(i) : "Your songs");
+                }
+                songIndex = 0; songFailures = 0; songStarted = false;
+                volume = intent.getFloatExtra("volume", 0.05f);
+                playSong();
+            } else if (ACTION_PLAY.equals(action)) {
+                songUris = null;
                 stopBackupTimers();
                 backupMode = false;
                 title = intent.getStringExtra("title") != null ? intent.getStringExtra("title") : "Radio";
@@ -264,9 +295,26 @@ public class PlaybackService extends Service {
             duck = 1f; pausedForFocus = false;
             mp.setVolume(volume, volume);
             requestFocus();
-            mp.setOnPreparedListener(p -> { if (p == player) { p.start(); setState(PlaybackState.STATE_PLAYING); if (!backupMode) send("playing"); } });
-            mp.setOnErrorListener((p, w, e) -> { if (p == player) { if (!backupMode) send("error"); shutdown(); } return true; });
-            mp.setOnCompletionListener(p -> { if (p == player) { if (!backupMode) send("ended"); shutdown(); } });
+            mp.setOnPreparedListener(p -> {
+                if (p != player) return;
+                p.start(); setState(PlaybackState.STATE_PLAYING);
+                if (songUris != null) {
+                    songFailures = 0;
+                    if (!songStarted) { songStarted = true; send("playing"); }
+                    send("song:" + songIndex);
+                } else if (!backupMode) send("playing");
+            });
+            mp.setOnErrorListener((p, w, e) -> {
+                if (p != player) return true;
+                if (songUris != null) { songFailures++; nextSong(); }    // skip a song that won't play
+                else { if (!backupMode) send("error"); shutdown(); }
+                return true;
+            });
+            mp.setOnCompletionListener(p -> {
+                if (p != player) return;
+                if (songUris != null) nextSong();
+                else { if (!backupMode) send("ended"); shutdown(); }
+            });
             mp.prepareAsync();
         } catch (Exception e) {
             if (!backupMode) send("error");
@@ -281,10 +329,30 @@ public class PlaybackService extends Service {
         shutdown();
     }
 
+    // ---------- your songs ----------
+    private void playSong() {
+        if (songUris == null || songUris.isEmpty()) return;
+        title = songNames.get(songIndex);
+        goForeground();
+        startPlayer(songUris.get(songIndex), false);
+    }
+
+    private void nextSong() {
+        if (songUris == null) return;
+        if (songFailures >= songUris.size()) {      // none of them will play (deleted, or no longer allowed)
+            send("error");
+            shutdown();
+            return;
+        }
+        songIndex = (songIndex + 1) % songUris.size();   // round and round until you stop it
+        playSong();
+    }
+
     private void shutdown() {
         stopBackupTimers();
         abandonFocus();
         backupMode = false;
+        songUris = null;
         releasePlayer();
         setState(PlaybackState.STATE_STOPPED);
         stopForeground(STOP_FOREGROUND_REMOVE);
