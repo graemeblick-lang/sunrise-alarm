@@ -12,6 +12,9 @@ android {
         targetSdk 34
         versionCode Integer.parseInt(System.getenv("VERSION_CODE") ?: "1")
         versionName "1." + (System.getenv("VERSION_CODE") ?: "1")
+        // Your Spotify developer app's Client ID (not a secret), from the SPOTIFY_CLIENT_ID GitHub variable.
+        // Lets the app start a chosen playlist in Spotify. Empty = Spotify still works, playing what you last played.
+        buildConfigField "String", "SPOTIFY_CLIENT_ID", "\"" + (System.getenv("SPOTIFY_CLIENT_ID") ?: "").replaceAll("[^A-Za-z0-9]", "") + "\""
     }
 
     signingConfigs {

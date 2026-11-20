@@ -16,6 +16,19 @@ GitHub builds it automatically. Download `SunriseAlarm.apk` from the latest Rele
 
 The web page still keeps the same address inside the app (`graemeblick-lang.github.io/sunrise-alarm/`), but every request to it is answered from the APK. That keeps your saved settings, songs and logins, and the Spotify login redirect, working unchanged. The GitHub Pages site is only needed if you want to use the app in a browser instead.
 
+### Spotify
+
+In the app: **Wake-up sound → Spotify → Connect Spotify** (once), then in Spotify open a playlist, album or song, tap **Share** and pick **Sunrise**. That's it. If the music can't start, Sunrise presses play in Spotify (what you last played), and if nothing plays, the chimes take over.
+
+Spotify only lets an app start a chosen playlist if it's registered as a Spotify "developer app". That's a one-time job for whoever builds the app:
+
+1. At [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard), create an app (or open the one you already have) with:
+   - Redirect URI: `au.sunrise.alarm://spotify-callback`
+   - APIs used: **Android**
+   - Android package: `au.sunrise.alarm`, SHA-1 fingerprint: `A0:00:4D:EE:71:42:49:C6:EB:0C:CF:24:2D:20:5D:3C:1B:94:D0:4A` (the app's release signing key)
+2. Copy its **Client ID**. In this GitHub repo: **Settings → Secrets and variables → Actions → Variables → New repository variable**, name `SPOTIFY_CLIENT_ID`.
+3. The next build has it built in. (Without it, Spotify still works but plays what you last played.)
+
 ### How the alarm stays reliable
 
 - **The app keeps its own schedule.** The page sends the next 8 alarms to Android, which keeps them set even if the app is closed, the phone restarts, the app updates or the clock/time zone changes.

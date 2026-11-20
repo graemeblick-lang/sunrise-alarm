@@ -162,9 +162,6 @@
   #setup .row .chips:not(.days){flex:0 0 auto;min-width:168px}
   /* Rows of tonal buttons (Add songs, Find speakers…) stay as separate pills */
   #setup .chips.btnrow{border:0;height:auto;overflow:visible;gap:8px;flex-wrap:wrap}
-  #setup #spDevices.chips{border:0;height:auto;overflow:visible;gap:8px;flex-wrap:wrap}
-  #setup #spDevices .chip{flex:0 0 auto;border:1px solid var(--md-outline);border-radius:8px;height:32px;padding:0 12px}
-  #setup #spDevices .chip.sel{border-color:transparent}
 
   /* Day filter chips */
   #setup .days{gap:6px;justify-content:space-between}
@@ -340,40 +337,19 @@
       </div>
 
       <div class="sub-panel" id="spotifyPanel">
-        <div id="spSimpleRow">
-          <div class="row"><span>Simple mode (no setup)</span><div class="toggle" id="spSimpleTgl"></div></div>
-          <div class="hint" style="margin:0 0 10px">Presses play in the Spotify app and fades it in, so it plays whatever you last had on. Also the automatic backup if a connection can't start.</div>
+        <div class="spbox" style="margin-top:0">
+          <div class="row"><span><b>Spotify</b></span><span id="spAppState" class="pill"></span></div>
+          <div class="hint" id="spAppHint"></div>
+          <div class="chips btnrow" style="margin-top:8px"><button class="small" id="spAppConnect">Connect Spotify</button><button class="small" id="spDisconnect">Disconnect</button></div>
         </div>
-        <div id="spFull">
-          <input type="text" id="spClient" placeholder="Spotify Client ID" autocomplete="off" style="margin-top:0">
-
-          <div id="spAppBox" class="spbox">
-            <div class="row"><span><b>Spotify app connection</b> · best</span><span id="spAppState" class="pill"></span></div>
-            <div class="hint">Plays your chosen playlist through the Spotify app on this phone. One-time setup in your Spotify developer app → <b>Settings → Edit</b>:</div>
-            <div class="kv"><small>Android package</small><code id="kvPkg">au.sunrise.alarm</code></div>
-            <div class="kv"><small>SHA-1 fingerprint</small><code id="kvSha">A0:00:4D:EE:71:42:49:C6:EB:0C:CF:24:2D:20:5D:3C:1B:94:D0:4A</code></div>
-            <div class="kv"><small>Redirect URI (add as well)</small><code id="kvRedir">au.sunrise.alarm://spotify-callback</code></div>
-            <div class="chips btnrow" style="margin-top:8px"><button class="small" id="spAppConnect">Connect with Spotify app</button></div>
-          </div>
-
-          <div id="spWebBox" class="spbox">
-            <div class="row"><span><b>Internet connection</b><span id="spWebSub"> · backup</span></span><span id="spWebState" class="pill"></span></div>
-            <div id="spSetup">
-              <div class="hint">Redirect URI to add in Spotify: <code id="spRedirect"></code></div>
-              <div class="chips btnrow" style="margin-top:8px"><button class="small" id="spConnect">Connect over the internet</button></div>
-            </div>
-            <div id="spReady">
-              <div style="font-size:14px;color:var(--md-on-surface-var);margin-top:4px">Play on</div>
-              <div class="chips" id="spDevices" style="margin-top:6px"></div>
-              <div class="chips btnrow" style="margin-top:8px"><button class="small" id="spFind">Find speakers</button><button class="small" id="spLogout">Disconnect</button></div>
-            </div>
-          </div>
-
-          <div id="spPlaylistBox">
-            <input type="url" id="spLink" placeholder="Paste a Spotify playlist, album or song link">
-            <div class="row"><span>Shuffle</span><div class="toggle" id="spShuffle"></div></div>
-          </div>
+        <div class="spbox">
+          <div class="row"><span><b>Wake-up music</b></span><span id="spLinkState" class="pill"></span></div>
+          <div class="hint" id="spLinkHint"></div>
+          <div class="chips btnrow" style="margin-top:8px"><button class="small" id="spClearLink">Use what I last played</button><button class="small" id="spPasteBtn">Paste a link instead</button></div>
+          <input type="url" id="spLink" placeholder="Paste a Spotify playlist, album or song link" style="display:none">
+          <div class="row"><span>Shuffle</span><div class="toggle" id="spShuffle"></div></div>
         </div>
+        <div class="hint">If your playlist can't start, Sunrise presses play in Spotify instead, and if that doesn't work either, the chimes play.</div>
       </div>
 
       <div class="sub-panel" id="appsPanel">
@@ -559,12 +535,10 @@
   const curStation = () => { const l = stationList(); return l[S.station] || l[0]; };
   const DEF = { time:"06:30", days:[1,2,3,4,5], dur:30, src:"chimes", station:0, customUrl:"", vol:70, fade:3, snooze:9, dim:2,
                 lat:-37.814, lon:144.963, place:"Melbourne", willy:"", todoToken:"", myStations:[],
-                spClient:"", spLink:"", spShuffle:true, spDevice:null, spSimple:false, spAppOk:false, appPkg:"", appName:"", earlyMin:0, earlyVol:25, sunMax:60, sunCustom:false, sunCols:["#3a0d02","#ff7a26","#fff1d6"], pauseUntil:"", perDay:false, dayTimes:{}, theme:"sunrise", auto:true, skip:0 };
+                spClient:"", spLink:"", spName:"", spShuffle:true, spAppOk:false, appPkg:"", appName:"", earlyMin:0, earlyVol:25, sunMax:60, sunCustom:false, sunCols:["#3a0d02","#ff7a26","#fff1d6"], pauseUntil:"", perDay:false, dayTimes:{}, theme:"sunrise", auto:true, skip:0 };
   const NATIVE = (window.Android && typeof window.Android.schedule === "function") ? window.Android : null;
-  // Spotify tokens are kept separately from settings
-  let SPT = {};
-  try { SPT = JSON.parse(localStorage.getItem("sunrise-spotify") || "{}"); } catch(e){}
-  const saveSPT = () => { try { localStorage.setItem("sunrise-spotify", JSON.stringify(SPT)); } catch(e){} };
+  // Spotify now connects through the Spotify app only; remove internet login tokens left by older versions
+  try { localStorage.removeItem("sunrise-spotify"); } catch(e){}
   let S = { ...DEF };
   try { const s = JSON.parse(localStorage.getItem("sunrise-settings") || "null"); if (s) S = { ...DEF, ...s }; } catch(e){}
   const save = () => { try { localStorage.setItem("sunrise-settings", JSON.stringify(S)); } catch(e){} };
@@ -715,6 +689,7 @@
   chipGroup($("srcChips"), ["chimes","radio","spotify","songs","apps"], "src", v=>({chimes:"Chimes",spotify:"Spotify",radio:"Radio",songs:"Songs",apps:"Apps"})[v]);
   const HAS_APPS = !!(NATIVE && typeof NATIVE.listMusicApps === "function");
   if (!HAS_APPS) $("srcChips").querySelector('[data-v="apps"]').remove();
+  if (!(NATIVE && typeof NATIVE.spotifyWake === "function")) $("srcChips").querySelector('[data-v="spotify"]').remove();
   chipGroup($("earlyChips"), [0,5,10,15], "earlyMin", v=> v ? `${v} min` : "Off");
   let musicApps = null;
   function loadMusicApps(){
@@ -836,6 +811,7 @@
     $("songsPanel").classList.toggle("on", S.src==="songs");
     $("spotifyPanel").classList.toggle("on", S.src==="spotify");
     if (S.src==="apps" && !HAS_APPS) S.src = "chimes";
+    if (S.src==="spotify" && !NATIVE_SP) S.src = "chimes";
     $("appsPanel").classList.toggle("on", S.src==="apps");
     if (S.src==="apps"){
       const sel = $("musicApp"), apps = loadMusicApps();
@@ -848,22 +824,7 @@
     [...$("earlyChips").children].forEach(b=>b.classList.toggle("sel", +b.dataset.v === +S.earlyMin));
     $("earlyHint").style.display = S.src==="chimes" ? "none" : "";
     $("earlyVol").value = S.earlyVol; $("earlyVolTxt").textContent = S.earlyVol + "%";
-    const spOn = !!SPT.refresh;
-    const simpleOK = !!(NATIVE && typeof NATIVE.spotifyWake === "function");
-    $("spSimpleRow").style.display = simpleOK ? "" : "none";
-    $("spSimpleTgl").classList.toggle("on", simpleOK && S.spSimple);
-    const simpleOn = simpleOK && S.spSimple;
-    const hasRemote = !!(NATIVE && typeof NATIVE.spotifyRemote === "function");
-    $("spFull").style.display = simpleOn ? "none" : "";
-    $("spAppBox").style.display = hasRemote ? "" : "none";
-    $("spWebSub").style.display = hasRemote ? "" : "none";
-    $("spAppState").textContent = S.spAppOk ? "✓ Connected" : "Not set up"; $("spAppState").classList.toggle("ok", !!S.spAppOk);
-    $("spWebState").textContent = spOn ? "✓ Connected" : "Not set up"; $("spWebState").classList.toggle("ok", spOn);
-    $("spSetup").style.display = spOn ? "none" : "";
-    $("spReady").style.display = spOn ? "" : "none";
-    $("spRedirect").textContent = SP.redirect();
-    $("spClient").value = S.spClient; $("spLink").value = S.spLink;
-    $("spShuffle").classList.toggle("on", S.spShuffle);
+    paintSpotify();
     $("station").value = S.station;
     if (!stationList()[S.station]) S.station = 0;
     renderStationSelect(); $("station").value = S.station;
@@ -912,7 +873,7 @@
     $("sumAlarm").textContent = (paused ? "Paused · " : "") + daysText() + (S.perDay ? " (own times)" : "") + ` · sunrise ${S.dur} min · snooze ${S.snooze} min`;
     const st = curStation()[0].replace("…","");
     const src = S.src==="radio" ? "📻 " + st : S.src==="songs" ? "♪ Your songs" :
-                S.src==="spotify" ? ("Spotify" + (S.spSimple ? " (simple)" : (S.spAppOk || SPT.refresh) ? " · connected" : " (simple)")) :
+                S.src==="spotify" ? ("Spotify" + (S.spAppOk && SP.parseLink(S.spLink) ? ` · ${S.spName || "your playlist"}` : " · what you last played")) :
                 S.src==="apps" ? "🎵 " + (S.appName || "Choose a music app") : "Chimes";
     $("sumSound").textContent = `${src} · fade ${S.fade} min` + (S.earlyMin && S.src!=="chimes" ? ` · starts ${S.earlyMin} min early` : "");
     $("sumLook").textContent = `${(THEMES[S.theme]||THEMES.sunrise).name} theme · ${S.sunCustom ? "own sunrise colours" : "theme sunrise"} · ${S.sunMax}%`;
@@ -1121,90 +1082,51 @@
   $("songFile").onchange = async e => { if (e.target.files.length){ await songsAdd([...e.target.files]); paintSongs(); toast(`Added ${e.target.files.length} song(s)`); } e.target.value=""; };
   $("clearSongs").onclick = async () => { await songsClear(); paintSongs(); };
 
-  // ---------- Spotify (Web API, PKCE login, plays via Spotify Connect) ----------
-  const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+  // ---------- Spotify (through the Spotify app on this phone) ----------
   const SP = {
-    redirect: () => location.origin + location.pathname,
-    async connect(){
-      S.spClient = $("spClient").value.trim(); save();
-      if (!S.spClient) return toast("Paste your Spotify Client ID first");
-      const arr = crypto.getRandomValues(new Uint8Array(48));
-      const verifier = b64url(arr);
-      const challenge = b64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
-      SPT.verifier = verifier; saveSPT();
-      const q = new URLSearchParams({ response_type:"code", client_id:S.spClient, redirect_uri:SP.redirect(),
-        scope:"user-modify-playback-state user-read-playback-state", code_challenge_method:"S256", code_challenge:challenge });
-      location.href = "https://accounts.spotify.com/authorize?" + q;
-    },
-    async tokenCall(params){
-      const r = await fetchT("https://accounts.spotify.com/api/token", { method:"POST",
-        headers:{ "Content-Type":"application/x-www-form-urlencoded" }, body:new URLSearchParams({ client_id:S.spClient, ...params }) });
-      if (!r.ok) throw { status:r.status };
-      const j = await r.json();
-      SPT.access = j.access_token; SPT.exp = Date.now() + (j.expires_in||3600)*1000;
-      if (j.refresh_token) SPT.refresh = j.refresh_token;
-      saveSPT();
-    },
-    async handleRedirect(){
-      const q = new URLSearchParams(location.search);
-      if (!q.has("code") && !q.has("error")) return;
-      history.replaceState(null, "", location.pathname);
-      if (q.has("error")) return toast("Spotify login was cancelled");
-      try {
-        await SP.tokenCall({ grant_type:"authorization_code", code:q.get("code"), redirect_uri:SP.redirect(), code_verifier:SPT.verifier });
-        delete SPT.verifier; saveSPT();
-        S.src = "spotify"; save(); goPage("sound", true); toast("Spotify connected");
-        SP.listDevices();
-      } catch(e){ toast("Spotify login failed. Check the Client ID and redirect URI."); }
-    },
-    async token(){
-      if (SPT.access && Date.now() < SPT.exp - 60000) return SPT.access;
-      if (!SPT.refresh) throw { status:401 };
-      try { await SP.tokenCall({ grant_type:"refresh_token", refresh_token:SPT.refresh }); }
-      catch(e){
-        // 400 = Spotify no longer accepts this login (revoked or expired): forget it so the app falls back cleanly
-        if (e && e.status === 400){ SPT = {}; saveSPT(); toast("Spotify needs you to connect again (Settings → Sound)"); }
-        throw e;
-      }
-      return SPT.access;
-    },
-    async api(method, path, body){
-      const t = await SP.token();
-      const r = await fetchT("https://api.spotify.com/v1" + path, { method,
-        headers: { Authorization:"Bearer " + t, ...(body ? { "Content-Type":"application/json" } : {}) },
-        body: body ? JSON.stringify(body) : undefined });
-      if (!r.ok) throw { status:r.status };
-      const tx = await r.text(); return tx ? JSON.parse(tx) : {};
-    },
-    async devices(){ return (await SP.api("GET","/me/player/devices")).devices || []; },
-    async listDevices(){
-      const box = $("spDevices"); box.innerHTML = '<span class="hint" style="margin:0">Looking…</span>';
-      try {
-        const ds = await SP.devices();
-        box.innerHTML = "";
-        if (!ds.length){ box.innerHTML = '<span class="hint" style="margin:0">No speakers found. Open Spotify on this phone, then tap Find speakers.</span>'; return; }
-        ds.forEach(d=>{ const b=document.createElement("button"); b.className="chip"+(S.spDevice&&S.spDevice.id===d.id?" sel":""); b.textContent=(d.type==="Smartphone"?"📱 ":"🔊 ")+d.name;
-          b.onclick=()=>{ S.spDevice={id:d.id,name:d.name}; save(); paint(); SP.listDevices(); }; box.appendChild(b); });
-      } catch(e){ box.innerHTML = '<span class="hint" style="margin:0">Couldn\'t reach Spotify.</span>'; }
-    },
-    async findDevice(){
-      if (!S.spDevice) return null;
-      const ds = await SP.devices();
-      return ds.find(d=>d.id===S.spDevice.id) || ds.find(d=>d.name===S.spDevice.name) || null;
-    },
+    /** A Spotify playlist/album/artist/song link (or spotify: URI) as a spotify: URI, or null. */
     parseLink(s){
       const m = (s||"").match(/(playlist|album|artist|track|show|episode)[/:]([A-Za-z0-9]{10,})/);
-      if (!m) return null;
-      const uri = `spotify:${m[1]}:${m[2]}`;
-      return (m[1]==="track"||m[1]==="episode") ? { uris:[uri] } : { context_uri:uri };
+      return m ? { uri:`spotify:${m[1]}:${m[2]}`, kind: m[1]==="track" ? "song" : m[1] } : null;
     }
   };
-  $("spConnect").onclick = () => SP.connect();
-  $("spFind").onclick = () => SP.listDevices();
-  $("spLogout").onclick = () => { SPT = {}; saveSPT(); S.spDevice = null; save(); paint(); };
-  $("spLink").onchange = e => { S.spLink = e.target.value.trim(); save(); if (S.spLink && !SP.parseLink(S.spLink)) toast("That doesn't look like a Spotify link"); };
-  $("spClient").onchange = e => { S.spClient = e.target.value.trim(); save(); };
-  $("spSimpleTgl").onclick = () => { S.spSimple = !S.spSimple; save(); paint(); };
+  // The Spotify developer Client ID is built into the app; one saved by an older version still works
+  const spId = () => { try { return (NATIVE && NATIVE.spotifyClientId && NATIVE.spotifyClientId()) || S.spClient || ""; } catch(e){ return S.spClient || ""; } };
+  function paintSpotify(){
+    const canConnect = !!(NATIVE && typeof NATIVE.spotifyRemote === "function" && spId());
+    const link = SP.parseLink(S.spLink);
+    $("spAppState").textContent = S.spAppOk ? "✓ Connected" : "Not connected"; $("spAppState").classList.toggle("ok", !!S.spAppOk);
+    $("spAppHint").textContent = S.spAppOk ? "Sunrise can start your wake-up music in the Spotify app on this phone."
+      : canConnect ? "Connect once so Sunrise can start your wake-up music. Spotify asks you to agree, then you're done."
+      : "This version of the app can't choose music in Spotify, so it presses play and you hear what you last played.";
+    $("spAppConnect").style.display = canConnect && !S.spAppOk ? "" : "none";
+    $("spDisconnect").style.display = S.spAppOk ? "" : "none";
+    $("spLinkState").textContent = link ? (S.spName || `Your ${link.kind}`) : "What you last played";
+    $("spLinkState").classList.toggle("ok", !!link);
+    $("spLinkHint").innerHTML = (link ? "" : "Sunrise plays whatever you last had on in Spotify. ")
+      + "To choose music: in Spotify, open a playlist, album or song, tap <b>Share</b>, then pick <b>Sunrise</b>.";
+    $("spClearLink").style.display = link ? "" : "none";
+    $("spLink").value = S.spLink;
+    $("spShuffle").classList.toggle("on", S.spShuffle);
+    $("spShuffle").parentElement.style.display = link && link.kind !== "song" ? "" : "none";
+  }
+  function setSpotifyLink(text, name){
+    const link = SP.parseLink(text);
+    if (!link){ toast("That isn't a Spotify playlist, album or song link"); return false; }
+    const url = (text.match(/https?:\/\/open\.spotify\.com\/\S+/) || [text.trim()])[0];
+    S.spLink = url; S.spName = (name || "").replace(/\s+/g, " ").trim().slice(0, 60); S.src = "spotify"; save(); paint();
+    if (!S.spAppOk && spId()) toast(`Wake-up ${link.kind} saved. Tap Connect Spotify so Sunrise can start it.`);
+    else toast(`Wake-up ${link.kind} saved`);
+    return true;
+  }
+  // Shared from Spotify (Share → Sunrise), passed in by the Android app
+  window.nativeShared = (text, subject) => {
+    if (setSpotifyLink(String(text||""), String(subject||"")) && mode === "setup") goPage("sound", true);
+  };
+  $("spLink").onchange = e => { const v = e.target.value.trim(); if (v) setSpotifyLink(v, ""); };
+  $("spPasteBtn").onclick = () => { $("spLink").style.display = ""; $("spPasteBtn").style.display = "none"; $("spLink").focus(); };
+  $("spClearLink").onclick = () => { S.spLink = ""; S.spName = ""; save(); paint(); };
+  $("spDisconnect").onclick = () => { S.spAppOk = false; save(); paint(); };
   $("spShuffle").onclick = () => { S.spShuffle = !S.spShuffle; save(); paint(); };
 
   // ---------- Audio engine ----------
@@ -1320,7 +1242,6 @@
   }
   async function startSongs(){ using = "songs"; player.volume = 0.05; songQueue = []; await playNextSong(); }
 
-  let spDev = null, spLastVol = -1, spLastSet = 0;
   const NATIVE_SP = !!(NATIVE && typeof NATIVE.spotifyWake === "function");
   let spNativeFade = false;
   const sleep = ms => new Promise(r=>setTimeout(r, ms));
@@ -1357,8 +1278,8 @@
   // Spotify app connection (official App Remote SDK, Android app only)
   let srWaiter = null, srAuth = null, spRemote = false;
   const SR_MSG = { CouldNotFindSpotifyApp:"The Spotify app isn't installed", NotLoggedInException:"Log in to the Spotify app first",
-    UserNotAuthorizedException:"Spotify said no: check the Android package, SHA-1 and redirect URI in your Spotify developer app",
-    AuthenticationFailedException:"Spotify said no: check the Android package, SHA-1 and redirect URI in your Spotify developer app",
+    UserNotAuthorizedException:"Spotify didn't accept Sunrise. The one-time Spotify developer setup isn't finished (see the README)",
+    AuthenticationFailedException:"Spotify didn't accept Sunrise. The one-time Spotify developer setup isn't finished (see the README)",
     OfflineModeException:"Spotify is in offline mode", UnsupportedFeatureVersionException:"Update the Spotify app" };
   function handleSr(ev){
     const err = ev.startsWith("sr:error:") ? ev.slice(9) : null;
@@ -1369,72 +1290,34 @@
     return new Promise(res => {
       const t = setTimeout(()=>{ srWaiter = null; res(false); }, 15000);
       srWaiter = ok => { clearTimeout(t); srWaiter = null; res(ok); };
-      try { NATIVE.spotifyRemote(S.spClient, uri, !!S.spShuffle); } catch(e){ srWaiter(false); }
+      try { NATIVE.spotifyRemote(spId(), uri, !!S.spShuffle); } catch(e){ srWaiter(false); }
     });
   }
   $("spAppConnect").onclick = () => {
-    S.spClient = $("spClient").value.trim(); save();
-    if (!S.spClient) return toast("Paste your Spotify Client ID first");
+    if (!spId()) return toast("This version of the app isn't set up for Spotify");
     $("spAppState").textContent = "Connecting…";
     const t = setTimeout(()=>{ if (srAuth){ srAuth = null; toast("No answer from Spotify. Open the Spotify app and try again."); paint(); } }, 45000);
     srAuth = err => { clearTimeout(t);
       if (err){ S.spAppOk = false; save(); paint(); toast(SR_MSG[err] || `Spotify couldn't connect (${err})`); }
       else { S.spAppOk = true; S.src = "spotify"; save(); paint(); toast("Connected to the Spotify app"); }
     };
-    try { NATIVE.spotifyRemoteAuth(S.spClient); } catch(e){ srAuth = null; toast("This needs the latest Android app"); }
+    try { NATIVE.spotifyRemoteAuth(spId()); } catch(e){ srAuth = null; toast("This needs the latest Android app"); }
   };
   async function startSpotify(){
-    using = "spotify"; spDev = null; spLastVol = -1; spNativeFade = false; spRemote = false;
-    if (NATIVE_SP && S.spSimple) return startSpotifySimple(false);
-    // 1) Spotify app connection: start the chosen playlist directly
+    using = "spotify"; spNativeFade = false; spRemote = false;
+    if (!NATIVE_SP) return spotifyFail("Spotify needs the Android app");
+    // 1) Start the chosen music in the Spotify app
     const link = SP.parseLink(S.spLink);
-    if (S.spAppOk && S.spClient && link && NATIVE && NATIVE.spotifyRemote){
+    if (S.spAppOk && link && spId() && NATIVE.spotifyRemote){
       $("rNow").textContent = "Starting Spotify…";
       try { NATIVE.musicFadeStart(); spNativeFade = true; } catch(e){}
-      const ok = await remotePlay(link.context_uri || link.uris[0]);
-      if (using !== "spotify") return;
-      if (ok){ spRemote = true; simplePkg = "com.spotify.music"; $("rNow").textContent = "🎵 Spotify"; return; }
-    }
-    // 2) No internet connection set up: simple mode
-    if (NATIVE_SP && !SPT.refresh) return startSpotifySimple(false);
-    $("rNow").textContent = "Starting Spotify…";
-    const body = SP.parseLink(S.spLink);
-    try {
-      if (!SPT.refresh) throw "login";
-      if (!body) throw "link";
-      let d = null;
-      if (NATIVE_SP){
-        // Turn media volume down, wake the Spotify app, then wait for it to appear as a speaker
-        let woke = false; try { woke = NATIVE.spotifyWake(); } catch(e){}
-        if (woke) spNativeFade = true;
-        for (let i = 0; i < 14 && !d; i++){
-          if (using !== "spotify") return;
-          try { d = await SP.findDevice(); } catch(e){}
-          if (!d) await sleep(1500);
-        }
-      } else {
-        d = await SP.findDevice();
-      }
-      if (!d) throw "device";
+      const ok = await remotePlay(link.uri);
       if (using !== "spotify") return;               // snoozed/stopped while we were waiting
-      // With the app's native fade, Spotify plays at full and the phone's media volume does the fading
-      const initPct = spNativeFade ? 100 : Math.round(Math.max(5, Math.min(1, 0.06 + (Date.now()-ringStart)/(S.fade*60000)) * S.vol));
-      await SP.api("PUT", `/me/player/volume?volume_percent=${initPct}&device_id=${d.id}`).catch(()=>{});
-      await SP.api("PUT", `/me/player/play?device_id=${d.id}`, body);
-      await SP.api("PUT", `/me/player/shuffle?state=${S.spShuffle}&device_id=${d.id}`).catch(()=>{});
-      if (using !== "spotify"){ SP.api("PUT", `/me/player/pause?device_id=${d.id}`).catch(()=>{}); return; }
-      spDev = d.id; spLastVol = initPct; spLastSet = Date.now();
-      $("rNow").textContent = "🎵 Spotify on " + d.name;
-    } catch(e){
-      if (using !== "spotify") return;
-      const why = e==="login" ? "Spotify isn't connected" : e==="link" ? "No Spotify playlist set" :
-                  e==="device" ? "Spotify isn't showing this phone" : "Spotify didn't start";
-      // Backup: in the Android app, fall back to simple mode (Spotify may already be playing from the wake-up press)
-      if (NATIVE_SP && spNativeFade) return startSpotifySimple(true);
-      spotifyFail(why);
+      if (ok){ spRemote = true; simplePkg = "com.spotify.music"; $("rNow").textContent = "🎵 " + (S.spName || "Spotify"); return; }
     }
+    // 2) Press play in Spotify (what you last played); 3) if nothing plays, chimes
+    return startSpotifySimple(false);
   }
-
   function startSound(){
     ringStart = Date.now(); userVol = false; captureKeys(true);
     if (S.src==="radio") startRadio(); else if (S.src==="songs") startSongs(); else if (S.src==="spotify") startSpotify();
@@ -1446,7 +1329,6 @@
     userVol = false; captureKeys(false);
     clearInterval(chimeTimer); chimeTimer = null;
     if (master && ac) master.gain.setTargetAtTime(0, ac.currentTime, 0.2);
-    if (spDev){ SP.api("PUT", `/me/player/pause?device_id=${spDev}`).catch(()=>{}); spDev = null; }
     if (spRemote){ try { NATIVE.spotifyRemotePause(); } catch(e){} spRemote = false; }
     if (spNativeFade){ pressPause(); try { NATIVE.musicRestore(); } catch(e){} spNativeFade = false; }
     stopPlayer(); using = null;
@@ -1477,14 +1359,6 @@
     curVol = v;
     if (using==="chimes"){ if (master && ac) master.gain.setTargetAtTime(v, ac.currentTime, 0.5); }
     else if ((using==="spotify" || using==="app") && spNativeFade){ try { NATIVE.musicVolume(Math.max(0.07, v)); } catch(e){} }
-    else if (using==="spotify"){
-      // Spotify volume is set over the internet, so step it every 10 s rather than every second
-      const pct = Math.round(Math.max(5, v*100));
-      if (spDev && pct !== spLastVol && Date.now()-spLastSet > 10000){
-        spLastVol = pct; spLastSet = Date.now();
-        SP.api("PUT", `/me/player/volume?volume_percent=${pct}&device_id=${spDev}`).catch(()=>{});
-      }
-    }
     else if (using==="radio" && NATIVE_RADIO){ try { NATIVE.radioVolume(v); } catch(e){} }
     else if (using==="radio" || using==="songs") player.volume = Math.max(0, Math.min(1, v));
   }
@@ -1560,7 +1434,6 @@
     }
     wxFetchedAtSunrise = false; earlyStopped = false;
     if (!preview){ saveArmed(); armBackup(+alarmAt); }
-    if (S.src==="spotify") SP.findDevice().then(d=>{ if (!d) toast("Spotify can't see your speaker. Open Spotify once, or it'll use the chimes."); }).catch(()=>toast("Couldn't reach Spotify. It'll use the chimes if needed."));
     initAudio(); grabWake().then(statusText);
     try { document.documentElement.requestFullscreen && document.documentElement.requestFullscreen().catch(()=>{}); } catch(e){}
     mode = "night"; show("night"); tick();
@@ -1752,8 +1625,6 @@
   $("preview").onclick = () => enterNight(true);
 
   paint(); paintSongs(); statusText(); paintTomorrow();
-  SP.handleRedirect();
-  if (SPT.refresh && S.src==="spotify") SP.listDevices();
   if (!NATIVE && !("wakeLock" in navigator)) { wakeOK=false; statusText(); }
 
   // Resume overnight mode if the app was reloaded or reopened

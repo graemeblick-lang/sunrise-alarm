@@ -44,6 +44,12 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Share a playlist from Spotify to Sunrise to make it the wake-up music -->
+            <intent-filter android:label="Sunrise wake-up music">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
         </activity>
 
         <receiver android:name=".AlarmReceiver" android:exported="false" />

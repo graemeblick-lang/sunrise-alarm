@@ -68,6 +68,8 @@ public class MainActivity extends Activity {
     private volatile String pageHost = "";
     private boolean pageLoaded = false;
     private long wakeAlarm = 0;   // the alarm this launch is for (0 = normal launch)
+    /** A Spotify link shared to the app, waiting for the page to be ready. */
+    private String[] pendingShare;
     private GeolocationPermissions.Callback geoCallback;
     private String geoOrigin;
 
@@ -113,6 +115,7 @@ public class MainActivity extends Activity {
         } catch (Exception ignored) { }
 
         wakeAlarm = wakeAlarmFor(getIntent());
+        takeShare(getIntent());
         buildWeb();
         loadApp();
         clearWakeNotifications();
@@ -173,7 +176,7 @@ public class MainActivity extends Activity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 trackHost(url);
-                if (isAppUrl(Uri.parse(url))) { pageLoaded = true; checkForUpdate(false); }
+                if (isAppUrl(Uri.parse(url))) { pageLoaded = true; deliverShare(); checkForUpdate(false); }
             }
 
             @Override
@@ -221,6 +224,23 @@ public class MainActivity extends Activity {
         web.loadUrl(APP_URL + hash());
     }
 
+    /** Keeps a Spotify link shared to Sunrise (Spotify → Share → Sunrise). Anything else is ignored. */
+    private boolean takeShare(Intent i) {
+        if (i == null || !Intent.ACTION_SEND.equals(i.getAction())) return false;
+        String text = i.getStringExtra(Intent.EXTRA_TEXT);
+        if (text == null || !(text.contains("open.spotify.com/") || text.contains("spotify:"))) return false;
+        String subject = i.getStringExtra(Intent.EXTRA_SUBJECT);
+        pendingShare = new String[]{ text.length() > 1000 ? text.substring(0, 1000) : text, subject == null ? "" : subject };
+        return true;
+    }
+
+    private void deliverShare() {
+        if (pendingShare == null || web == null) return;
+        String js = "window.nativeShared && window.nativeShared(" + JSONObject.quote(pendingShare[0]) + "," + JSONObject.quote(pendingShare[1]) + ")";
+        pendingShare = null;
+        web.evaluateJavascript(js, null);
+    }
+
     /** Tell the page when a newer APK is on GitHub Releases. */
     private void checkForUpdate(boolean force) {
         UpdateCheck.check(this, force, code -> runOnUiThread(() -> {
@@ -237,6 +257,7 @@ public class MainActivity extends Activity {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
+        if (takeShare(intent) && pageLoaded) deliverShare();
         if (web != null && isWake(intent)) {
             long ms = intent.getLongExtra(AlarmScheduler.EXTRA_ALARM, 0);
             if (pageLoaded) web.evaluateJavascript("window.nativeWake && window.nativeWake(" + ms + ")", null);
@@ -449,6 +470,8 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void musicFadeStart() { if (ok()) audio.musicFadeStart(); }
 
         // ----- Spotify app (official App Remote SDK) -----
+        /** The Spotify developer Client ID built into this app (empty if none). */
+        @JavascriptInterface public String spotifyClientId() { return ok() ? BuildConfig.SPOTIFY_CLIENT_ID : ""; }
         @JavascriptInterface public void spotifyRemoteAuth(String clientId) {
             if (ok()) runOnUiThread(() -> spotify.connect(getApplicationContext(), clientId, true, null, false));
         }
