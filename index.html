@@ -862,8 +862,8 @@
   function goPage(name, push){
     if (!PAGES.includes(name)) name = "main";
     // Pages rebuilt as native Android screens open there instead
-    if (name === "alarm" && NATIVE && typeof NATIVE.openSettings === "function"){
-      try { if (NATIVE.openSettings("alarm")) return; } catch(e){}
+    if (["alarm","look","morning"].includes(name) && NATIVE && typeof NATIVE.openSettings === "function"){
+      try { if (NATIVE.openSettings(name)) return; } catch(e){}
     }
     if (name !== "stations" && typeof stopPreview === "function") stopPreview();
     document.querySelectorAll("#setup .page").forEach(p=>p.classList.toggle("on", p.dataset.page===name));
@@ -1695,7 +1695,10 @@
     const ns = nativeSettings(); if (!ns) return;
     S = { ...DEF, ...ns };
     try { localStorage.setItem("sunrise-settings", JSON.stringify(S)); } catch(e){}
-    if (mode === "setup"){ paint(); $("nextTxt").textContent = nextText(); }
+    if (mode === "setup"){ paint(); $("nextTxt").textContent = nextText(); paintTomorrow(); }
+    // e.g. "Preview the sunrise" on the native Look screen
+    let action = ""; try { action = NATIVE.takeSettingsAction ? NATIVE.takeSettingsAction() : ""; } catch(e){}
+    if (action === "preview" && mode === "setup") enterNight(true);
   };
 
   // ---------- Updates (Android app: everything is built in, so new versions come as a new APK) ----------

@@ -1,0 +1,71 @@
+package au.sunrise.alarm
+
+import org.json.JSONArray
+import org.json.JSONObject
+
+/** "Look & brightness" settings (keys and ranges as in the page). */
+data class LookSettings(
+    val theme: String = "sunrise",
+    val sunCustom: Boolean = false,
+    val sunCols: List<String> = listOf("#3a0d02", "#ff7a26", "#fff1d6"),
+    /** Overnight clock brightness, 1..6. */
+    val dim: Int = 2,
+    /** How bright the screen gets by alarm time, 15..100 %. */
+    val sunMax: Int = 60,
+) {
+    fun into(j: JSONObject) {
+        j.put("theme", theme)
+        j.put("sunCustom", sunCustom)
+        j.put("sunCols", JSONArray(sunCols))
+        j.put("dim", dim)
+        j.put("sunMax", sunMax)
+    }
+
+    companion object {
+        fun from(j: JSONObject): LookSettings {
+            val d = LookSettings()
+            val cols = j.optJSONArray("sunCols")?.let { a -> (0 until a.length()).map { a.optString(it) } }
+                ?.takeIf { c -> c.size == 3 && c.all { Themes.parse(it) != null } } ?: d.sunCols
+            return LookSettings(
+                theme = j.optString("theme", d.theme).ifEmpty { d.theme },
+                sunCustom = j.optBoolean("sunCustom", d.sunCustom),
+                sunCols = cols,
+                dim = j.optInt("dim", d.dim).coerceIn(1, 6),
+                sunMax = j.optInt("sunMax", d.sunMax).coerceIn(15, 100),
+            )
+        }
+    }
+}
+
+/** "Morning screen" settings: where the weather is for, and the optional links. */
+data class MorningSettings(
+    val lat: Double = -37.814,
+    val lon: Double = 144.963,
+    val place: String = "Melbourne",
+    val willy: String = "",
+    val todoToken: String = "",
+) {
+    fun into(j: JSONObject) {
+        j.put("lat", lat)
+        j.put("lon", lon)
+        j.put("place", place)
+        j.put("willy", willy)
+        j.put("todoToken", todoToken)
+    }
+
+    companion object {
+        fun from(j: JSONObject): MorningSettings {
+            val d = MorningSettings()
+            return MorningSettings(
+                lat = j.optDouble("lat", d.lat).takeIf { !it.isNaN() } ?: d.lat,
+                lon = j.optDouble("lon", d.lon).takeIf { !it.isNaN() } ?: d.lon,
+                place = j.optString("place", d.place).ifEmpty { d.place },
+                willy = j.optString("willy", ""),
+                todoToken = j.optString("todoToken", ""),
+            )
+        }
+
+        /** Rounded to 3 decimals (about 100 m), as the page does: no more precise than the weather needs. */
+        fun round3(v: Double): Double = Math.round(v * 1000.0) / 1000.0
+    }
+}

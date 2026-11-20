@@ -592,9 +592,17 @@ public class MainActivity extends Activity {
             return ok() && SettingsStore.has(MainActivity.this) ? SettingsStore.read(MainActivity.this).toString() : "";
         }
         @JavascriptInterface public void putSettings(String json) { if (ok()) SettingsStore.write(MainActivity.this, json); }
-        /** Opens a native settings screen ("alarm"). */
+        /** Something a native settings screen asked the page to do on return ("preview"), once. */
+        @JavascriptInterface public String takeSettingsAction() {
+            if (!ok()) return "";
+            android.content.SharedPreferences p = getSharedPreferences(AlarmScheduler.PREFS, 0);
+            String a = p.getString(SettingsActivity.PREF_ACTION, "");
+            p.edit().remove(SettingsActivity.PREF_ACTION).apply();
+            return a;
+        }
+        /** Opens a native settings screen ("alarm", "look", "morning"). */
         @JavascriptInterface public boolean openSettings(String page) {
-            if (!ok() || !"alarm".equals(page)) return false;
+            if (!ok() || !SettingsActivity.Companion.getPAGES().contains(page)) return false;
             runOnUiThread(() -> startActivity(new Intent(MainActivity.this, SettingsActivity.class).putExtra("page", page)));
             return true;
         }
