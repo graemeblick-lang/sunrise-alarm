@@ -231,7 +231,7 @@ public class PlaybackService extends Service {
             NotificationChannel ch = new NotificationChannel(CHANNEL, "Music playing", NotificationManager.IMPORTANCE_LOW);
             ch.setDescription("Shows while the alarm's radio is playing");
             nm.createNotificationChannel(ch);
-            PendingIntent open = PendingIntent.getActivity(this, 20, new Intent(this, MainActivity.class)
+            PendingIntent open = PendingIntent.getActivity(this, 20, new Intent(this, AlarmFlowActivity.class)
                     .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE);
             b = new Notification.Builder(this, CHANNEL)
                     .setSmallIcon(android.R.drawable.ic_media_play)

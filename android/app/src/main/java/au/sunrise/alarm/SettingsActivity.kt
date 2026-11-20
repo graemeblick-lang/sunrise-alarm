@@ -108,7 +108,9 @@ class SettingsActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         resumes++
-        reschedule()   // the page may have changed things (e.g. turned one alarm off)
+        reschedule()   // the alarm screens may have changed things (e.g. turned one alarm off)
+        // A music fade-in that was cut short (e.g. the phone restarted mid-alarm) left the media volume low: put it back
+        if (AlarmScheduler.activeAlarm(this, 0) == 0L) runCatching { NativeAudio(this).musicRestore() }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -135,9 +137,9 @@ class SettingsActivity : ComponentActivity() {
         }.onFailure { App.save(this, "Scheduling alarms from the settings", it) }
     }
 
-    /** Goodnight / Preview: the web page shows the night screen. */
+    /** Goodnight / Preview: the night screen (AlarmFlowActivity). */
     private fun startNight(action: String) {
-        startActivity(Intent(this, MainActivity::class.java).putExtra("start", action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        startActivity(Intent(this, AlarmFlowActivity::class.java).putExtra("start", action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         finish()
     }
 

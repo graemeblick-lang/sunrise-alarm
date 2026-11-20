@@ -36,7 +36,7 @@
         android:usesCleartextTraffic="true"
         android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
 
-        <!-- The night, alarm and morning screens (the web page). Opened by the app itself, never from the launcher. -->
+        <!-- The web version of the night, alarm and morning screens. No longer opened (replaced by AlarmFlowActivity). -->
         <activity
             android:name=".MainActivity"
             android:exported="false"
@@ -46,6 +46,17 @@
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
             android:screenOrientation="unspecified">
         </activity>
+
+        <!-- The night, alarm and morning screens. Shows over the lock screen; opened by the app itself. -->
+        <activity
+            android:name=".AlarmFlowActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:theme="@android:style/Theme.Material.NoActionBar"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode"
+            android:screenOrientation="unspecified" />
 
         <!-- The app opens here: the native home screen and settings (Jetpack Compose, Material 3). Predictive back is on. -->
         <activity

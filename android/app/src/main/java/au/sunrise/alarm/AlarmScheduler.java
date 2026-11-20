@@ -141,7 +141,7 @@ public final class AlarmScheduler {
     private static void setClock(Context c, long atMs, PendingIntent pi) {
         AlarmManager am = alarmManager(c);
         PendingIntent show = PendingIntent.getActivity(c, 2,
-                new Intent(c, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                new Intent(c, SettingsActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         try {
             am.setAlarmClock(new AlarmManager.AlarmClockInfo(atMs, show), pi);
