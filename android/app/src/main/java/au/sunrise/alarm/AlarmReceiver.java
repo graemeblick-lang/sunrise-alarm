@@ -78,7 +78,7 @@ public class AlarmReceiver extends BroadcastReceiver {
     }
 
     static Intent wakeIntent(Context c, long alarmMs) {
-        return new Intent(c, MainActivity.class)
+        return new Intent(c, AlarmFlowActivity.class)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP)
                 .putExtra("wake", true)
                 .putExtra(AlarmScheduler.EXTRA_ALARM, alarmMs);
