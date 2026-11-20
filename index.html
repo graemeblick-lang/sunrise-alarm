@@ -1137,7 +1137,9 @@
       if (!ac){
         ac = new (window.AudioContext||window.webkitAudioContext)();
         master = ac.createGain(); master.gain.value = 0; master.connect(ac.destination);
-        const k = ac.createOscillator(), kg = ac.createGain(); kg.gain.value = 0.00001; k.connect(kg).connect(ac.destination); k.start();
+        // In a browser a near-silent tone keeps audio unlocked. Not in the Android app: there it isn't needed,
+        // and Android would count it as music playing, hiding whether a music app really started.
+        if (!NATIVE){ const k = ac.createOscillator(), kg = ac.createGain(); kg.gain.value = 0.00001; k.connect(kg).connect(ac.destination); k.start(); }
       }
       ac.resume();
     } catch(e){}
@@ -1253,18 +1255,25 @@
   async function startSimple(kind, pkg, name, already){
     using = kind; simplePkg = pkg;
     $("rNow").textContent = `Starting ${name}…`;
+    // Sunrise's own audio must be quiet, or Android reports "music playing" even if the app never started
+    clearInterval(chimeTimer); chimeTimer = null;
+    try { if (ac && ac.state === "running") await ac.suspend(); } catch(e){}
     if (!already){
       let ok = false;
       try { ok = NATIVE.appWake ? NATIVE.appWake(pkg) : NATIVE.spotifyWake(); } catch(e){}
-      if (!ok) return simpleFail(kind, `${name} isn't installed`);
+      if (!ok) return simpleFail(kind, `Couldn't press play in ${name} (is it installed?)`);
       spNativeFade = true;
     }
-    for (let i = 0; i < 8; i++){
+    let nudged = false;
+    for (let i = 0; i < 12; i++){
+      await sleep(1000);
       if (using !== kind) return;
       if (musicPlaying()){ $("rNow").textContent = `🎵 ${name} (what you last played)`; return; }
-      await sleep(1000);
+      // Android 12+ can stop an app starting from a direct press when it isn't already running.
+      // Pressing play through Android itself (like headphones) is allowed to start it.
+      if (i === 3 && !nudged && NATIVE.mediaPlayAny){ nudged = true; try { NATIVE.mediaPlayAny(); } catch(e){} }
     }
-    simpleFail(kind, `${name} didn't start`);
+    simpleFail(kind, `${name} didn't start playing`);
   }
   const startSpotifySimple = already => startSimple("spotify", "com.spotify.music", "Spotify", already);
   function simpleFail(kind, why){

@@ -42,6 +42,15 @@ final class NativeAudio {
         return true;
     }
 
+    /** A play press routed by Android to the media app that played last (works even if it isn't running). */
+    void systemPlay() {
+        long t = SystemClock.uptimeMillis();
+        try {
+            am.dispatchMediaKeyEvent(new KeyEvent(t, t, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PLAY, 0));
+            am.dispatchMediaKeyEvent(new KeyEvent(t, t, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PLAY, 0));
+        } catch (Exception ignored) { }
+    }
+
     // ---------- Media volume, for fading music apps in ----------
     /**
      * Remember the current media volume and drop it low before music starts.

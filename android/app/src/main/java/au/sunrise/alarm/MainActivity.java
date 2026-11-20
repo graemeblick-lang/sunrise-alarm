@@ -64,8 +64,12 @@ public class MainActivity extends Activity {
     private NativeAudio audio;
     private SpotifyRemote spotify;
     private volatile boolean captureVolume = false;
-    /** The host of the page that's showing; only our own page may use window.Android. */
-    private volatile String pageHost = "";
+    /**
+     * True while the WebView shows someone else's page (only the Spotify sign-in pages can open in-app).
+     * window.Android refuses to work then. Our own page is trusted by default, so a missed callback
+     * can never silently stop alarms or music.
+     */
+    private volatile boolean foreignPage = false;
     private boolean pageLoaded = false;
     private long wakeAlarm = 0;   // the alarm this launch is for (0 = normal launch)
     /** A Spotify link shared to the app, waiting for the page to be ready. */
@@ -212,7 +216,7 @@ public class MainActivity extends Activity {
                 old.destroy();
             }
         } catch (Exception ignored) { }
-        pageLoaded = false; pageHost = "";
+        pageLoaded = false; foreignPage = false;
         wakeAlarm = 0;   // the page picks the alarm back up from its own saved state
         try { buildWeb(); loadApp(); } catch (Throwable t) { App.save(this, "Rebuilding the page", t); }
     }
@@ -220,7 +224,7 @@ public class MainActivity extends Activity {
     /** Open the app (served from the APK by LocalSite, at its usual address so saved settings are kept). */
     private void loadApp() {
         if (!LocalSite.hasApp(this)) throw new IllegalStateException("The app's web files are missing from this APK");
-        pageHost = APP_HOST;
+        foreignPage = false;
         web.loadUrl(APP_URL + hash());
     }
 
@@ -355,7 +359,8 @@ public class MainActivity extends Activity {
         if (url == null) return;
         if (url.startsWith("data:") || url.startsWith("about:")) return;
         String h = Uri.parse(url).getHost();
-        pageHost = h == null ? "" : h;
+        if (h == null || h.isEmpty()) return;
+        foreignPage = !APP_HOST.equals(h);
     }
 
     private static boolean isAppUrl(Uri u) { return u != null && APP_HOST.equals(u.getHost()); }
@@ -399,7 +404,7 @@ public class MainActivity extends Activity {
      * shows can't set alarms, play things or read the list of installed apps.
      */
     class Bridge {
-        private boolean ok() { return APP_HOST.equals(pageHost); }
+        private boolean ok() { return !foreignPage; }
 
         // ----- alarms -----
         /** The next few alarms as JSON [[sunriseMs, alarmMs], ...]. "[]" turns automatic opening off. */
@@ -468,6 +473,11 @@ public class MainActivity extends Activity {
         @JavascriptInterface public boolean appWake(String pkg) { if (!ok()) return false; audio.musicFadeStart(); return audio.appKey(pkg, KeyEvent.KEYCODE_MEDIA_PLAY); }
         @JavascriptInterface public void appPause(String pkg) { if (ok()) audio.appKey(pkg, KeyEvent.KEYCODE_MEDIA_PAUSE); }
         @JavascriptInterface public void musicFadeStart() { if (ok()) audio.musicFadeStart(); }
+        /**
+         * Presses play through Android itself, like a headphone button. Reaches the app that last played
+         * (Android lets it start from cold, which a direct press can't always do on Android 12+).
+         */
+        @JavascriptInterface public void mediaPlayAny() { if (ok()) audio.systemPlay(); }
 
         // ----- Spotify app (official App Remote SDK) -----
         /** The Spotify developer Client ID built into this app (empty if none). */
