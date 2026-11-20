@@ -71,12 +71,12 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
 
-// ---------- Alarm & schedule ----------
+// ---------- Schedule: the repeating alarm in detail ----------
 
-private val DAY_LETTERS = listOf("S", "M", "T", "W", "T", "F", "S")
-private val DAY_NAMES = listOf("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
+internal val DAY_LETTERS = listOf("S", "M", "T", "W", "T", "F", "S")
+internal val DAY_NAMES = listOf("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
 /** Monday first, the way most people read a week (the page numbers Sunday as 0). */
-private val WEEK_ORDER = listOf(1, 2, 3, 4, 5, 6, 0)
+internal val WEEK_ORDER = listOf(1, 2, 3, 4, 5, 6, 0)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -88,16 +88,8 @@ fun AlarmScreen(initial: AlarmSettings, is24Hour: Boolean, onChange: (AlarmSetti
     var editingTime by remember { mutableStateOf<Int?>(null) }
     var pickingPause by remember { mutableStateOf(false) }
 
-    SettingsScaffold("Alarm & schedule", onBack) {
+    SettingsScaffold("Schedule", onBack) {
             NextAlarmCard(s, is24Hour)
-
-            SwitchRow(
-                title = "Wake me automatically",
-                subtitle = "Sunrise opens itself and starts the sunrise, even if the screen is off. No need to tap Goodnight.",
-                checked = s.auto,
-                onCheckedChange = { update(s.copy(auto = it)) },
-            )
-            HorizontalDivider(Modifier.padding(horizontal = 16.dp))
 
             ListItem(
                 headlineContent = { Text("Alarm time") },
@@ -149,12 +141,6 @@ fun AlarmScreen(initial: AlarmSettings, is24Hour: Boolean, onChange: (AlarmSetti
                 }
             }
 
-            SectionTitle("Sunrise starts before the alarm")
-            Choice(AlarmSettings.SUNRISE_LENGTHS, s.dur, { "$it min" }) { update(s.copy(dur = it)) }
-
-            SectionTitle("Snooze")
-            Choice(AlarmSettings.SNOOZE_LENGTHS, s.snooze, { "$it min" }) { update(s.copy(snooze = it)) }
-
             SectionTitle("Pause alarms")
             val paused = pauseDate(s.pauseUntil)?.takeIf { !it.isBefore(LocalDate.now()) }
             ListItem(
@@ -197,7 +183,7 @@ fun AlarmScreen(initial: AlarmSettings, is24Hour: Boolean, onChange: (AlarmSetti
 private fun NextAlarmCard(s: AlarmSettings, is24Hour: Boolean) {
     val next = s.nextAlarm(ZonedDateTime.now())
     val text = when {
-        next == null -> "No alarm set"
+        next == null -> "No repeating alarm"
         else -> {
             val now = LocalDate.now()
             val day = when (next.toLocalDate()) {
@@ -219,7 +205,7 @@ private fun NextAlarmCard(s: AlarmSettings, is24Hour: Boolean) {
             Text(text, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
             if (next != null) {
                 Text(
-                    "Sunrise starts ${s.dur} min before" + if (!s.auto) " · tap Goodnight to start it" else "",
+                    "Sunrise starts ${s.dur} min before",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
@@ -243,7 +229,7 @@ internal fun TimeDialog(title: String, initial: LocalTime, is24Hour: Boolean, on
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PauseDialog(initial: LocalDate?, onDismiss: () -> Unit, onConfirm: (LocalDate) -> Unit) {
+internal fun PauseDialog(initial: LocalDate?, onDismiss: () -> Unit, onConfirm: (LocalDate) -> Unit) {
     val today = LocalDate.now()
     val state = rememberDatePickerState(
         initialSelectedDateMillis = (initial ?: today.plusDays(1)).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
@@ -267,7 +253,7 @@ private fun PauseDialog(initial: LocalDate?, onDismiss: () -> Unit, onConfirm: (
 
 private fun utcDate(ms: Long): LocalDate = Instant.ofEpochMilli(ms).atZone(ZoneOffset.UTC).toLocalDate()
 
-private fun pauseDate(s: String): LocalDate? = runCatching { if (s.isEmpty()) null else LocalDate.parse(s) }.getOrNull()
+internal fun pauseDate(s: String): LocalDate? = runCatching { if (s.isEmpty()) null else LocalDate.parse(s) }.getOrNull()
 
 private fun showTime(hhmm: String, is24Hour: Boolean): String {
     val t = AlarmSettings.parseTime(hhmm) ?: return hhmm
@@ -275,10 +261,10 @@ private fun showTime(hhmm: String, is24Hour: Boolean): String {
     else "${if (t.hour % 12 == 0) 12 else t.hour % 12}:%02d %s".format(t.minute, if (t.hour < 12) "am" else "pm")
 }
 
-private fun showDate(d: LocalDate): String = d.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM))
+internal fun showDate(d: LocalDate): String = d.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM))
 
 private fun repeatSummary(days: Set<Int>): String = when {
-    days.isEmpty() -> "Once only (no repeat days chosen)"
+    days.isEmpty() -> "Off (no days chosen). For a one-off alarm, use Quick alarm on the home screen."
     days.size == 7 -> "Every day"
     days == setOf(1, 2, 3, 4, 5) -> "Weekdays"
     days == setOf(0, 6) -> "Weekends"

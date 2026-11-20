@@ -37,6 +37,14 @@ class MorningDataTest {
         assertEquals(30, w.high); assertEquals(0, w.rainChance); assertEquals("clear", w.todayText)
     }
 
+    @Test fun rainByHourForToday() {
+        val j = sample.trimEnd().removeSuffix("}") + ""","hourly":{"time":["2026-11-23T05:00","2026-11-23T06:00","2026-11-23T07:00","2026-11-23T09:00","2026-11-23T21:00","2026-11-24T06:00"],
+          "precipitation_probability":[90,10,50,35,null,80]}}"""
+        assertEquals(listOf(6 to 10, 9 to 35), WeatherData.parse(j, LocalDate.of(2026, 11, 23)).rainByHour)
+        assertEquals(listOf(6 to 80), WeatherData.parse(j, LocalDate.of(2026, 11, 24)).rainByHour)
+        assertEquals(emptyList<Pair<Int, Int>>(), WeatherData.parse(sample, LocalDate.of(2026, 11, 23)).rainByHour)
+    }
+
     @Test fun unknownWeatherCode() = assertEquals("🌡️" to "—", WeatherData.describe(1234))
 
     @Test fun todoistBothShapes() {

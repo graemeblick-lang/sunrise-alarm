@@ -4,7 +4,8 @@ A sunrise wake-up light and alarm for an old phone on a bedside stand.
 
 - Sunrise glow on the screen before the alarm
 - Wake to Spotify, internet radio, another music app or gentle chimes
-- Morning screen with weather (Open-Meteo), daylight times and Todoist tasks
+- Quick one-off alarms (in 5, 10, 20 or 30 minutes, or at a time you pick)
+- Morning screen with weather (Open-Meteo, including the chance of rain through the day), a link to the BOM forecast, daylight times and Todoist tasks
 
 Open https://graemeblick-lang.github.io/sunrise-alarm/ in Chrome on Android, then ⋮ → Add to home screen → Install.
 
@@ -47,7 +48,7 @@ For best results, tap **Fix** next to anything the Settings → Status card flag
 ## Development
 
 - The Android app is fully native: there is no web page inside it. `index.html` is only the browser version, and the source the native colours and built-in stations are checked against.
-- The app opens on a native home screen (`HomeScreen.kt`, in `SettingsActivity.kt`, Jetpack Compose with Material 3). The night, alarm and morning screens are native too (`AlarmFlowActivity.kt`, `AlarmFlowViews.kt`), with the wake-up sound in `WakeSound.kt`, the sunrise maths in `Sunrise.kt` (colours generated from the page by `tools/gen-theme-data.js`, checked by `tests/themes.test.js`) and the morning data in `MorningData.kt`. Android computes and keeps the alarm schedule itself (`AlarmSettings.plan`, checked against the page's `alarmPlan`). The settings screens: `AlarmScreen.kt`, `LookScreen.kt`, `MorningScreen.kt`, `SoundScreen.kt` and `StationsScreen.kt`, with shared parts in `SettingsUi.kt` and `Themes.kt`.  The native Test sound (`SoundTester.kt`, `ChimePlayer.kt`) plays every source natively. `tests/stations.test.js` checks the native copy of the built-in stations matches the page. Settings are kept in one store (`SettingsStore.kt`, the same JSON format the page uses). The native next-alarm logic (`AlarmSettings.kt`) has unit tests matching the JavaScript ones: `gradle testReleaseUnitTest`.
+- The app opens on a native home screen (`HomeScreen.kt`, in `SettingsActivity.kt`, Jetpack Compose with Material 3). The night, alarm and morning screens are native too (`AlarmFlowActivity.kt`, `AlarmFlowViews.kt`), with the wake-up sound in `WakeSound.kt`, the sunrise maths in `Sunrise.kt` (colours generated from the page by `tools/gen-theme-data.js`, checked by `tests/themes.test.js`) and the morning data in `MorningData.kt`. Android computes and keeps the alarm schedule itself (`AlarmSettings.plan`, checked against the page's `alarmPlan`). The home screen has the alarm card (time, days, skip, pause) and quick one-off alarms; the settings follow the night: Night and Sunrise (`LookScreen.kt`), Wake-up sound (`SoundScreen.kt`, `StationsScreen.kt`) and Morning (`MorningScreen.kt`), with the detailed Schedule in `AlarmScreen.kt`, with shared parts in `SettingsUi.kt` and `Themes.kt`.  The native Test sound (`SoundTester.kt`, `ChimePlayer.kt`) plays every source natively. `tests/stations.test.js` checks the native copy of the built-in stations matches the page. Settings are kept in one store (`SettingsStore.kt`, the same JSON format the page uses). The native next-alarm logic (`AlarmSettings.kt`) has unit tests matching the JavaScript ones: `gradle testReleaseUnitTest`.
 - Fonts are bundled from Fontsource (SIL Open Font License, see `fonts/`).
 - The alarm schedule logic sits between the `schedule:start` and `schedule:end` markers and is tested by `tests/schedule.test.js`:
   `TZ=Australia/Melbourne node tests/schedule.test.js`

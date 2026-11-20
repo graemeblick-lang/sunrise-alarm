@@ -16,6 +16,8 @@
 
     <queries>
         <package android:name="com.spotify.music" />
+        <!-- The BOM Weather app, opened from the morning screen -->
+        <package android:name="au.gov.bom.metview" />
         <intent>
             <action android:name="android.intent.action.MEDIA_BUTTON" />
         </intent>

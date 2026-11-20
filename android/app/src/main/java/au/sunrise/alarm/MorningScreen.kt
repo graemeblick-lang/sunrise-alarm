@@ -79,9 +79,10 @@ fun MorningScreen(initial: MorningSettings, onChange: (MorningSettings) -> Unit,
             }) { Text("Use my location") }
         }
         OutlinedTextField(
-            value = s.willy,
-            onValueChange = { update(s.copy(willy = it.trim())) },
-            label = { Text("Your WillyWeather page link (optional)") },
+            value = s.weatherLink,
+            onValueChange = { update(s.copy(weatherLink = it.trim())) },
+            label = { Text("Your BOM forecast page link (optional)") },
+            supportingText = { Text("Opens the BOM Weather app if you have it, otherwise this page or bom.gov.au. A WillyWeather link works too.") },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),

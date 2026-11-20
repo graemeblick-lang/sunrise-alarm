@@ -323,18 +323,12 @@ private fun MorningView(a: AlarmFlowActivity, theme: FullTheme) {
                         Stat("High", "${w.high}°", theme); Stat("Low", "${w.low}°", theme)
                         Stat("Rain", "${w.rainChance}%", theme); Stat("Wind", "${w.wind} km/h", theme)
                     }
+                    if (w.rainByHour.isNotEmpty()) RainByHour(w.rainByHour, a.is24Hour, theme)
                     if (w.uv >= 8) Text("☀️ UV ${w.uv}: slip, slop, slap", color = ink, fontSize = 16.sp, modifier = Modifier.padding(top = 10.dp))
                 }
             }
             Button(
-                onClick = {
-                    val url = if (Regex("^https://(www\\.)?willyweather\\.com\\.au/").containsMatchIn(m.willy)) m.willy else "https://www.willyweather.com.au/"
-                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                },
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.7f), contentColor = rgb(theme.v("mBtn"))),
-                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
-            ) { Text("Open WillyWeather ↗", fontSize = 16.sp) }
+                onClick = { openWeather(context, m.weatherLink) },            ) { Text(MorningSettings.linkLabel(m.weatherLink), fontSize = 16.sp) }
 
             Card(theme, "Daylight") {
                 val sun = SunTimes.of(LocalDate.now(), m.lat, m.lon)
@@ -389,6 +383,42 @@ private fun Card(theme: FullTheme, title: String, content: @Composable ColumnSco
         Text(title.uppercase(), color = rgb(theme.v("mLabel")), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp,
             modifier = Modifier.padding(bottom = 10.dp))
         content()
+    }
+}
+
+/** Your saved BOM/WillyWeather page; with none, the BOM Weather app if it's installed, otherwise bom.gov.au. */
+private fun openWeather(context: android.content.Context, link: String) {
+    val i = when {
+        MorningSettings.linkOk(link) -> Intent(Intent.ACTION_VIEW, Uri.parse(link))
+        else -> context.packageManager.getLaunchIntentForPackage(MorningSettings.BOM_APP)
+            ?: Intent(Intent.ACTION_VIEW, Uri.parse(MorningSettings.BOM_SITE))
+    }
+    runCatching { context.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+}
+
+/** The chance of rain through the day, as small bars: 6 am, 9 am … 9 pm. */
+@Composable
+private fun RainByHour(rain: List<Pair<Int, Int>>, is24Hour: Boolean, theme: FullTheme) {
+    val ink = rgb(theme.v("mInk"))
+    val muted = rgb(theme.v("mMuted"))
+    Text("CHANCE OF RAIN", color = muted, fontSize = 11.sp, letterSpacing = 0.7.sp, modifier = Modifier.padding(top = 14.dp, bottom = 6.dp))
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        rain.forEach { (hour, pct) ->
+            val label = if (is24Hour) "%02d".format(hour) else "${if (hour % 12 == 0) 12 else hour % 12}${if (hour < 12) "am" else "pm"}"
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = "$label, $pct% chance of rain" },
+            ) {
+                Text("$pct%", color = ink, fontSize = 13.sp)
+                Box(Modifier.height(36.dp).width(14.dp), contentAlignment = Alignment.BottomCenter) {
+                    Box(
+                        Modifier.fillMaxWidth().height((36 * pct.coerceIn(4, 100) / 100).dp)
+                            .clip(RoundedCornerShape(4.dp)).background(ink.copy(alpha = 0.25f + 0.6f * pct / 100f)),
+                    )
+                }
+                Text(label, color = muted, fontSize = 12.sp)
+            }
+        }
     }
 }
 
