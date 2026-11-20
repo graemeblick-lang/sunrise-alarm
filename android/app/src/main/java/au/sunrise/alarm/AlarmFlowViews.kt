@@ -114,13 +114,14 @@ private fun NightView(a: AlarmFlowActivity, theme: FullTheme) {
             .pointerInput(Unit) { detectTapGestures { a.showControls() } },
         contentAlignment = Alignment.Center,
     ) {
+        val clockSize = bigTextSize(maxWidth, 0.30f, 190f)
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.offset(a.clockShift.first.dp, a.clockShift.second.dp),
         ) {
             Text(
                 clock(a.now, a.is24Hour), color = clockColour, fontWeight = FontWeight.ExtraLight,
-                fontSize = bigTextSize(maxWidth, 0.30f, 190f), maxLines = 1,
+                fontSize = clockSize, maxLines = 1,
             )
             Text(
                 if (p > 0) "Rise and shine…" else "⏰ " + timeWithAmPm(a.alarmAt, a.is24Hour),
@@ -280,10 +281,11 @@ private fun MorningView(a: AlarmFlowActivity, theme: FullTheme) {
         Modifier.fillMaxSize().background(Brush.verticalGradient(0f to rgb(theme.v("m1")), 0.55f to rgb(theme.v("m2")), 1f to rgb(theme.v("m3")))),
     ) {
         val landscape = maxWidth > maxHeight
+        val morningClockSize = bigTextSize(if (landscape) maxWidth * 0.5f else maxWidth, 0.24f * (if (landscape) 1.4f else 1f), 150f)
         val left: @Composable ColumnScope.() -> Unit = {
             val hour = Instant.ofEpochMilli(a.now).atZone(ZoneId.systemDefault()).hour
             Text(if (hour < 12) "Good morning" else if (hour < 17) "Good afternoon" else "Good evening", color = rgb(theme.v("mGreet")), fontSize = 22.sp, fontWeight = FontWeight.Light)
-            Text(clock(a.now, a.is24Hour), color = ink, fontWeight = FontWeight.ExtraLight, fontSize = bigTextSize(if (landscape) maxWidth * 0.5f else maxWidth, 0.24f * (if (landscape) 1.4f else 1f), 150f), maxLines = 1)
+            Text(clock(a.now, a.is24Hour), color = ink, fontWeight = FontWeight.ExtraLight, fontSize = morningClockSize, maxLines = 1)
             Text(
                 LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.getDefault())),
                 color = rgb(theme.v("mSub")), fontSize = 20.sp, modifier = Modifier.padding(top = 6.dp, bottom = 20.dp),
