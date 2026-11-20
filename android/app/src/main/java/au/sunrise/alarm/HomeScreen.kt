@@ -69,7 +69,7 @@ fun HomeScreen(
     val json = remember(refresh) { SettingsStore.read(context) }
     var alarm by remember(refresh) { mutableStateOf(AlarmSettings.from(json)) }
     fun update(n: AlarmSettings) { alarm = n; save(n) }
-    val problems = remember(refresh) { PhoneChecks.problems(context) }
+    val problems = remember(refresh) { runCatching { PhoneChecks.problems(context) }.getOrDefault(emptyList()) }
 
     // The "in 6h 12m" text keeps up with the clock
     var now by remember { mutableStateOf(ZonedDateTime.now()) }

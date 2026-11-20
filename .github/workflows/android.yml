@@ -68,8 +68,8 @@ jobs:
           VERSION_CODE: ${{ github.run_number }}
           # Your Spotify developer app's Client ID: Settings → Secrets and variables → Actions → Variables
           SPOTIFY_CLIENT_ID: ${{ vars.SPOTIFY_CLIENT_ID }}
-        # Unit tests (alarm schedule logic in Kotlin) run first; a failure stops the build
-        run: gradle testReleaseUnitTest assembleRelease --no-daemon --stacktrace
+        # Unit and screen tests (Robolectric) run first, on the debug build; a failure stops the build
+        run: gradle testDebugUnitTest assembleRelease --no-daemon --stacktrace
 
       - name: Keep the APK from this build
         if: github.event_name == 'pull_request'
