@@ -41,17 +41,6 @@ class SoundTester(context: Context, private val onStatus: (String?) -> Unit) {
                 onStatus("📻 Tuning in to $name…")
                 PlaybackService.play(ctx, urls[0], name, v)
             }
-            "songs" -> {
-                if (s.songs.isEmpty()) return fail("No songs added yet")
-                listen { ev ->
-                    when {
-                        ev.startsWith("song:") -> s.songs.getOrNull(ev.removePrefix("song:").toIntOrNull() ?: -1)?.let { onStatus("♪ ${it.name.substringBeforeLast('.')}") }
-                        ev == "error" -> fail("Your songs couldn't play. Try adding them again.")
-                    }
-                }
-                onStatus("♪ Your songs")
-                PlaybackService.playSongs(ctx, ArrayList(s.songs.map { it.uri }), ArrayList(s.songs.map { it.name }), v)
-            }
             "spotify" -> {
                 val link = SoundSettings.parseSpotify(s.spLink)
                 if (s.spAppOk && link != null && spotifyClientId.isNotEmpty()) {

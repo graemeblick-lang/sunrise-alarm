@@ -1,11 +1,5 @@
 package au.sunrise.alarm
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import android.provider.OpenableColumns
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,11 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -47,7 +37,6 @@ private val SOURCE_LABELS = mapOf(
     "chimes" to ("Chimes" to "Gentle bells. No internet needed."),
     "radio" to ("Radio" to "ABC stations, or any station you find."),
     "spotify" to ("Spotify" to "Your playlist in the Spotify app."),
-    "songs" to ("Your songs" to "Music files on this phone, shuffled."),
     "apps" to ("Another music app" to "Presses play in an app such as Podcast Addict."),
 )
 
@@ -74,17 +63,6 @@ fun SoundScreen(s: SoundSettings, update: (SoundSettings) -> Unit, spotifyClient
     var spotifyRemote by remember { mutableStateOf<SpotifyRemote?>(null) }
     DisposableEffect(Unit) { onDispose { spotifyRemote?.disconnect() } }
     var pasting by remember { mutableStateOf(false) }
-
-    val pickSongs = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        if (uris.isEmpty()) return@rememberLauncherForActivityResult
-        val added = uris.mapNotNull { uri ->
-            // Keep permission to read it after restarts; the file stays where it is (no copy)
-            runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-            val u = uri.toString()
-            if (s.songs.any { it.uri == u }) null else Song(displayName(context, uri), u)
-        }
-        update(s.copy(songs = s.songs + added, src = "songs"))
-    }
 
     SettingsScaffold("Wake-up sound", onBack) {
         SectionTitle("Play")
@@ -198,26 +176,6 @@ fun SoundScreen(s: SoundSettings, update: (SoundSettings) -> Unit, spotifyClient
                 Hint("If your music can't start, Sunrise presses play in Spotify instead, and if nothing plays, the chimes play.")
             }
 
-            "songs" -> {
-                SectionTitle("Your songs")
-                if (s.songs.isEmpty()) Hint("No songs added yet.")
-                s.songs.forEachIndexed { i, song ->
-                    ListItem(
-                        headlineContent = { Text(song.name.substringBeforeLast('.')) },
-                        trailingContent = {
-                            IconButton(onClick = {
-                                runCatching { context.contentResolver.releasePersistableUriPermission(Uri.parse(song.uri), Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-                                update(s.copy(songs = s.songs.filterIndexed { j, _ -> j != i }))
-                            }) { Icon(Icons.Filled.Delete, contentDescription = "Remove ${song.name}") }
-                        },
-                    )
-                }
-                Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    FilledTonalButton(onClick = { pickSongs.launch(arrayOf("audio/*")) }) { Text("Add songs") }
-                }
-                Hint("Songs stay where they are on your phone and play in shuffled order, even without internet.")
-            }
-
             "apps" -> {
                 SectionTitle("Music app")
                 if (musicApps.isEmpty()) Hint("No music apps found on this phone.")
@@ -273,9 +231,3 @@ private fun PercentSlider(label: String, value: Int, range: IntRange, onDone: (I
         )
     }
 }
-
-private fun displayName(c: Context, uri: Uri): String = runCatching {
-    c.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cur ->
-        if (cur.moveToFirst()) cur.getString(0) else null
-    }
-}.getOrNull() ?: (uri.lastPathSegment ?: "Song")

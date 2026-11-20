@@ -3,7 +3,7 @@
 A sunrise wake-up light and alarm for an old phone on a bedside stand.
 
 - Sunrise glow on the screen before the alarm
-- Wake to Spotify, internet radio, your own songs or gentle chimes
+- Wake to Spotify, internet radio, another music app or gentle chimes
 - Morning screen with weather (Open-Meteo), daylight times and Todoist tasks
 
 Open https://graemeblick-lang.github.io/sunrise-alarm/ in Chrome on Android, then ⋮ → Add to home screen → Install.
@@ -47,7 +47,7 @@ For best results, tap **Fix** next to anything the Settings → Status card flag
 ## Development
 
 - `index.html` is the whole web app. `android/app/build.gradle` copies it (with `fonts.css`, `fonts/`, the manifest and icons) into the APK at build time; `LocalSite.java` serves it.
-- Settings screens are moving to native Android (Jetpack Compose, Material 3), one screen at a time. All settings screens except the main list are native: `AlarmScreen.kt`, `LookScreen.kt`, `MorningScreen.kt`, `SoundScreen.kt` and `StationsScreen.kt`, with shared parts in `SettingsUi.kt` and `Themes.kt`. Songs come from Android's file picker and play through `PlaybackService`; the native Test sound (`SoundTester.kt`, `ChimePlayer.kt`) plays every source natively. `tests/stations.test.js` checks the native copy of the built-in stations matches the page. Both sides share one settings store (`SettingsStore.kt`, the same JSON the page uses), and the page reloads it when you come back from a native screen. The native next-alarm logic (`AlarmSettings.kt`) has unit tests matching the JavaScript ones: `gradle testReleaseUnitTest`.
+- Settings screens are moving to native Android (Jetpack Compose, Material 3), one screen at a time. All settings screens except the main list are native: `AlarmScreen.kt`, `LookScreen.kt`, `MorningScreen.kt`, `SoundScreen.kt` and `StationsScreen.kt`, with shared parts in `SettingsUi.kt` and `Themes.kt`.  The native Test sound (`SoundTester.kt`, `ChimePlayer.kt`) plays every source natively. `tests/stations.test.js` checks the native copy of the built-in stations matches the page. Both sides share one settings store (`SettingsStore.kt`, the same JSON the page uses), and the page reloads it when you come back from a native screen. The native next-alarm logic (`AlarmSettings.kt`) has unit tests matching the JavaScript ones: `gradle testReleaseUnitTest`.
 - Fonts are bundled from Fontsource (SIL Open Font License, see `fonts/`).
 - The alarm schedule logic sits between the `schedule:start` and `schedule:end` markers and is tested by `tests/schedule.test.js`:
   `TZ=Australia/Melbourne node tests/schedule.test.js`

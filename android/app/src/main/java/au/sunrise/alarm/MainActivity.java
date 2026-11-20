@@ -65,7 +65,7 @@ public class MainActivity extends Activity {
     private WebView web;
     private NativeAudio audio;
     private MediaApps media;
-    /** Audio focus held while the page plays chimes or your songs, so other apps pause for the alarm. */
+    /** Audio focus held while the page plays its chimes, so other apps pause for the alarm. */
     private AudioFocusRequest focusReq;
     private SpotifyRemote spotify;
     private volatile boolean captureVolume = false;
@@ -115,6 +115,12 @@ public class MainActivity extends Activity {
 
         // A music fade that was cut short (app closed mid-alarm) left the media volume low: put it back
         if (AlarmScheduler.activeAlarm(this, 0) == 0) audio.musicRestore();
+        // "Your songs" was removed: give back the permission to read song files picked for it
+        try {
+            for (android.content.UriPermission p : getContentResolver().getPersistedUriPermissions()) {
+                getContentResolver().releasePersistableUriPermission(p.getUri(), Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            }
+        } catch (Exception ignored) { }
         // Make sure the system alarms match what's saved (cheap, and fixes anything Android dropped)
         AlarmScheduler.reschedule(this);
 
@@ -539,21 +545,6 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void radioPlay(String url, double volume, String title) {
             if (!ok() || url == null || !(url.startsWith("http://") || url.startsWith("https://"))) return;
             runOnUiThread(() -> PlaybackService.play(MainActivity.this, url, title, (float) volume));
-        }
-        /** Your songs (chosen on the native Wake-up sound screen), shuffled, through the same player as the radio. */
-        @JavascriptInterface public boolean songsPlay(double volume) {
-            if (!ok()) return false;
-            java.util.ArrayList<String> uris = new java.util.ArrayList<>(), names = new java.util.ArrayList<>();
-            JSONArray a = SettingsStore.read(MainActivity.this).optJSONArray("songs");
-            for (int i = 0; a != null && i < a.length(); i++) {
-                JSONObject o = a.optJSONObject(i);
-                String u = o == null ? null : o.optString("uri", null);
-                if (u == null || !u.startsWith("content://")) continue;
-                uris.add(u); names.add(o.optString("name", "Your songs"));
-            }
-            if (uris.isEmpty()) return false;
-            runOnUiThread(() -> PlaybackService.playSongs(MainActivity.this, uris, names, (float) volume));
-            return true;
         }
         @JavascriptInterface public void radioVolume(double v) { if (ok()) runOnUiThread(() -> PlaybackService.setVolume(MainActivity.this, (float) v)); }
         @JavascriptInterface public void radioStop() { if (ok()) runOnUiThread(() -> PlaybackService.stop(MainActivity.this)); }

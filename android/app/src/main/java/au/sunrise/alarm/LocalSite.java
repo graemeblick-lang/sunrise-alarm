@@ -13,7 +13,7 @@ import java.util.Map;
  * Serves the web app from inside the APK, at its usual web address.
  *
  * The page keeps the address https://graemeblick-lang.github.io/sunrise-alarm/ so everything saved under it
- * (settings, your songs, Spotify and Todoist logins) carries on as before, and the Spotify login can still
+ * (settings, Spotify and Todoist logins) carries on as before, and the Spotify login can still
  * return to it. But every request to that address is answered here from the APK's own files:
  * nothing is fetched from the website, so it works with no internet and can't be changed from outside.
  */

@@ -22,17 +22,15 @@ object Stations {
 }
 
 data class MyStation(val name: String, val url: String, val favicon: String = "", val uuid: String = "")
-data class Song(val name: String, val uri: String)
 
 /** "Wake-up sound" settings (same keys as the page). */
 data class SoundSettings(
-    /** chimes | radio | spotify | songs | apps */
+    /** chimes | radio | spotify | apps */
     val src: String = "chimes",
     /** Index into built-in stations, then your stations, then "Custom stream". */
     val station: Int = 0,
     val customUrl: String = "",
     val myStations: List<MyStation> = emptyList(),
-    val songs: List<Song> = emptyList(),
     val vol: Int = 70,
     val fade: Int = 3,
     val earlyMin: Int = 0,
@@ -64,7 +62,7 @@ data class SoundSettings(
         j.put("myStations", JSONArray(myStations.map {
             JSONObject().put("name", it.name).put("url", it.url).put("favicon", it.favicon).put("uuid", it.uuid)
         }))
-        j.put("songs", JSONArray(songs.map { JSONObject().put("name", it.name).put("uri", it.uri) }))
+        j.remove("songs")   // "Your songs" was removed
         j.put("vol", vol)
         j.put("fade", fade)
         j.put("earlyMin", earlyMin)
@@ -78,7 +76,7 @@ data class SoundSettings(
     }
 
     companion object {
-        val SOURCES = listOf("chimes", "radio", "spotify", "songs", "apps")
+        val SOURCES = listOf("chimes", "radio", "spotify", "apps")
         val FADES = listOf(1, 3, 5)
         val EARLY = listOf(0, 5, 10, 15)
 
@@ -92,17 +90,11 @@ data class SoundSettings(
                     }
                 }
             } ?: emptyList()
-            val songs = j.optJSONArray("songs")?.let { a ->
-                (0 until a.length()).mapNotNull { i ->
-                    a.optJSONObject(i)?.let { o -> o.optString("uri").takeIf { it.startsWith("content://") }?.let { Song(o.optString("name", "Song"), it) } }
-                }
-            } ?: emptyList()
             val s = SoundSettings(
                 src = j.optString("src", d.src).takeIf { it in SOURCES } ?: d.src,
                 station = j.optInt("station", 0),
                 customUrl = j.optString("customUrl", ""),
                 myStations = mine,
-                songs = songs,
                 vol = j.optInt("vol", d.vol).coerceIn(10, 100),
                 fade = j.optInt("fade", d.fade),
                 earlyMin = j.optInt("earlyMin", d.earlyMin),

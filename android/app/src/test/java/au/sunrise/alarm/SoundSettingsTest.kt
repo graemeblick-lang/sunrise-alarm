@@ -10,8 +10,8 @@ class SoundSettingsTest {
 
     @Test fun readsThePagesJson() {
         val s = SoundSettings.from(JSONObject("""{"src":"radio","station":7,"myStations":[{"name":"Gold","url":"https://g"},{"name":"Bad","url":""}],
-            "songs":[{"name":"a.mp3","uri":"content://x/1"},{"name":"b","uri":"file:///nope"}],"vol":200,"spShuffle":false,"theme":"phone"}"""))
-        assertEquals("radio", s.src); assertEquals(1, s.myStations.size); assertEquals(1, s.songs.size)
+            "vol":200,"spShuffle":false,"theme":"phone"}"""))
+        assertEquals("radio", s.src); assertEquals(1, s.myStations.size)
         assertEquals(100, s.vol); assertEquals(false, s.spShuffle)
         assertEquals(7, s.station)   // 6 built-in + 1 of yours, so 7 is "Custom stream…"
         assertEquals(0, SoundSettings.from(JSONObject("""{"station":9}""")).station)   // doesn't exist → first
@@ -29,6 +29,14 @@ class SoundSettingsTest {
 
     @Test fun unknownSourceFallsBackToChimes() = assertEquals("chimes", SoundSettings.from(JSONObject("""{"src":"tape"}""")).src)
 
+    @Test fun yourSongsWasRemoved() {
+        val j = JSONObject("""{"src":"songs","songs":[{"name":"a","uri":"content://x/1"}]}""")
+        val s = SoundSettings.from(j)
+        assertEquals("chimes", s.src)
+        s.into(j)
+        assertEquals(false, j.has("songs"))
+    }
+
     @Test fun removingAStationKeepsTheChoice() {
         val s = SoundSettings(myStations = two, station = 7)          // Smooth chosen
         assertEquals(6, s.removeStation(0).station)                     // Gold removed: Smooth moves up
@@ -44,10 +52,9 @@ class SoundSettingsTest {
 
     @Test fun writesWithoutTouchingOtherKeys() {
         val j = JSONObject("""{"time":"06:30","theme":"ocean"}""")
-        SoundSettings(src = "songs", songs = listOf(Song("x", "content://a"))).into(j)
-        assertEquals("06:30", j.getString("time")); assertEquals("songs", j.getString("src"))
-        assertEquals("content://a", j.getJSONArray("songs").getJSONObject(0).getString("uri"))
-        assertEquals(SoundSettings.from(j).songs, listOf(Song("x", "content://a")))
+        SoundSettings(src = "apps", appPkg = "com.bambuna.podcastaddict").into(j)
+        assertEquals("06:30", j.getString("time")); assertEquals("apps", j.getString("src"))
+        assertEquals("com.bambuna.podcastaddict", SoundSettings.from(j).appPkg)
     }
 
     @Test fun parsesSpotifyLinks() {
