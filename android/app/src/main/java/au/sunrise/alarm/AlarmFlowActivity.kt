@@ -251,7 +251,7 @@ class AlarmFlowActivity : ComponentActivity() {
 
     fun showControls() { controlsUntil = System.currentTimeMillis() + 5_000 }
 
-    fun setNightLight(level: Int) {
+    fun chooseNightLight(level: Int) {
         nightLight = level; controlsUntil = 0
         nightLightOffAt = if (level > 0) System.currentTimeMillis() + 10 * 60_000L else 0L
         tick()

@@ -144,7 +144,7 @@ private fun NightView(a: AlarmFlowActivity, theme: FullTheme) {
                     }) { a.toggleNightMusic(); a.showControls() }
                 }
                 NightButton("☀ I'm up") { a.upFromNight() }
-                NightButton("💡 Night light") { a.setNightLight(1) }
+                NightButton("💡 Night light") { a.chooseNightLight(1) }
                 NightButton("Change alarm") { a.changeAlarm() }
                 NightButton("Turn off alarm") { a.turnOff() }
             }
@@ -184,7 +184,7 @@ private fun NightLight(a: AlarmFlowActivity, theme: FullTheme) {
                 }
             }
             .pointerInput(Unit) {
-                detectTapGestures(onTap = { a.setNightLight(0) }, onDoubleTap = { a.setNightLight(if (a.nightLight == 1) 2 else 1) })
+                detectTapGestures(onTap = { a.chooseNightLight(0) }, onDoubleTap = { a.chooseNightLight(if (a.nightLight == 1) 2 else 1) })
             }
             .semantics { contentDescription = "Night light. Tap to turn off, double-tap for brighter." },
         contentAlignment = Alignment.BottomCenter,
