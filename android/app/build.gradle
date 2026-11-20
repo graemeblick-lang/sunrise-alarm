@@ -46,6 +46,11 @@ android {
     testOptions {
         unitTests {
             includeAndroidResources = true
+            all {
+                maxHeapSize = "2g"
+                // A stuck screen test fails in minutes instead of holding up the build
+                timeout.set(java.time.Duration.ofMinutes(10))
+            }
         }
     }
 
