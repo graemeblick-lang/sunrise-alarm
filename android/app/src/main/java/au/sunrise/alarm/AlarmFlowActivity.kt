@@ -74,6 +74,8 @@ class AlarmFlowActivity : ComponentActivity() {
 
     lateinit var sound: WakeSound
         private set
+    /** Sleep sounds on the night screen (rain, ocean, soft noise). */
+    val noise = NoisePlayer()
     /** The shared settings (re-read when a night starts and when sound starts). */
     var settings = org.json.JSONObject()
         private set
@@ -89,7 +91,10 @@ class AlarmFlowActivity : ComponentActivity() {
 
     val alarm get() = AlarmSettings.from(settings)
     val look get() = LookSettings.from(settings)
-    val soundSettings get() = SoundSettings.from(settings)
+    /** The wake-up sound for this alarm's day (weekends can have their own). */
+    val soundSettings get() = SoundSettings.from(settings).forDay(
+        java.time.Instant.ofEpochMilli(alarmAt.takeIf { it > 0 } ?: System.currentTimeMillis()).atZone(java.time.ZoneId.systemDefault()).dayOfWeek.value % 7)
+    val night get() = NightSettings.from(settings)
     val morning get() = MorningSettings.from(settings)
     val is24Hour get() = DateFormat.is24HourFormat(this)
     val theme: FullTheme get() = Sunrise.theme(look.theme, phoneColours())
@@ -126,6 +131,7 @@ class AlarmFlowActivity : ComponentActivity() {
         // Closing normally stops the sound. If Android closes the screen by itself mid-alarm, the radio keeps
         // going in its service and the alarm carries on when the app reopens (it's still armed).
         if (isFinishing) sound.stop()
+        noise.stop()
         super.onDestroy()
     }
 
@@ -191,12 +197,13 @@ class AlarmFlowActivity : ComponentActivity() {
             alarmAt = next; sunriseStart = alarm.sunriseFor(next)
         }
         earlyStopped = false; weatherPrefetched = false; sound.earlyPlay = false; sleepUntil = 0
-        if (!preview) { saveArmed(); AlarmScheduler.armBackup(this, alarmAt) }
+        if (!preview) { saveArmed(); AlarmScheduler.armBackup(this, alarmAt); AlarmLog.night(this, alarmAt, t) }
         mode = "night"
         tick()
     }
 
     private fun enterRing() {
+        noise.stop(); sleepUntil = 0
         mode = "ring"; status = ""; ringEnteredAt = System.currentTimeMillis()
         if (!preview) { AlarmScheduler.markRinging(this); PlaybackService.stopBackup(this); AlarmLog.rang(this, alarmAt, ringEnteredAt) }
         if (sound.earlyPlay && sound.using != null) sound.continueFromEarly()
@@ -243,6 +250,7 @@ class AlarmFlowActivity : ComponentActivity() {
     fun toggleNightMusic() {
         if (sound.earlyPlay && sound.using != null) { sound.stop(); sound.earlyPlay = false; earlyStopped = true; sleepUntil = 0 }
         else {
+            noise.stop()
             sound.earlyPlay = true; startSound()
             // Before the alarm's own music time, it's music to fall asleep to: the sleep timer applies
             val m = NightSettings.from(settings).sleepTimer
@@ -250,6 +258,19 @@ class AlarmFlowActivity : ComponentActivity() {
             sleepUntil = if (m > 0 && beforeEarly && !preview) System.currentTimeMillis() + m * 60_000L else 0L
         }
         soundChanged++
+    }
+
+    /** Rain / ocean / soft noise to fall asleep to (the sleep timer applies). */
+    fun toggleSleepSound() {
+        if (noise.playing) { noise.stop(); sleepUntil = 0 }
+        else {
+            if (sound.earlyPlay && sound.using != null) { sound.stop(); sound.earlyPlay = false }
+            settings = SettingsStore.read(this)
+            runCatching { noise.start(night.sleepSound, 0.6f) }.onFailure { App.save(this, "Sleep sound", it) }
+            val m = night.sleepTimer
+            sleepUntil = if (m > 0) System.currentTimeMillis() + m * 60_000L else 0L
+        }
+        soundChanged++; showControls()
     }
 
     /** The sleep timer button: 15 → 30 → 60 min → off. */
@@ -308,11 +329,22 @@ class AlarmFlowActivity : ComponentActivity() {
                 val s = soundSettings
                 if (!preview && s.earlyMin > 0 && s.src != "chimes" && sound.using == null && !earlyStopped &&
                     t < alarmAt && t >= alarmAt - s.earlyMin * 60_000L) { sound.earlyPlay = true; startSound() }
+                val musicOn = sound.earlyPlay && sound.using != null
                 if (sleepUntil > 0) {
                     val left = sleepUntil - t
-                    if (!(sound.earlyPlay && sound.using != null)) sleepUntil = 0
-                    else if (left <= 0) { sound.stop(); sound.earlyPlay = false; sleepUntil = 0; status = ""; soundChanged++ }
-                    else if (left < 30_000) sound.fadeOutStep()        // fade out over the last 30 seconds
+                    if (!musicOn && !noise.playing) sleepUntil = 0
+                    else if (left <= 0) {
+                        if (musicOn) { sound.stop(); sound.earlyPlay = false; status = "" }
+                        noise.stop(); sleepUntil = 0; soundChanged++
+                    } else if (left < 30_000) {                        // fade out over the last 30 seconds
+                        if (musicOn) sound.fadeOutStep()
+                        noise.setVolume(noise.volume * 0.88f)
+                    }
+                }
+                // The sunrise has started: let the sleep sound fade away
+                if (p > 0 && noise.playing) {
+                    noise.setVolume(noise.volume * 0.93f)
+                    if (noise.volume < 0.02f) { noise.stop(); soundChanged++ }
                 }
                 if (sound.using != null) sound.ramp()
                 if (t >= alarmAt) enterRing()
@@ -356,6 +388,7 @@ class AlarmFlowActivity : ComponentActivity() {
 
     /** Not armed any more. If this alarm's sunrise had started, remember it was dealt with (so a late wake is ignored). */
     private fun disarm() {
+        noise.stop()
         getSharedPreferences(PREFS, 0).edit().clear().apply()
         if (!preview && alarmAt > 0 && System.currentTimeMillis() >= alarm.sunriseFor(alarmAt)) {
             SettingsStore.update(this) { it.put("handled", alarmAt) }

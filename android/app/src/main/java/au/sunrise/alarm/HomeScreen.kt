@@ -256,6 +256,8 @@ fun HomeScreen(
         SettingsRow("🌅", "Sunrise", HomeText.sunrise(look, alarm.dur)) { onOpen("sunrise") }
         SettingsRow("🔊", "Wake-up sound", HomeText.sound(sound, alarm.snooze)) { onOpen("sound") }
         SettingsRow("☀️", "Morning", HomeText.morning(morning)) { onOpen("morning") }
+        SettingsRow("📈", "Your week", AlarmLog.weekSummary(AlarmLog.entries(context), System.currentTimeMillis(), is24Hour)
+            .ifEmpty { "When you got up, snoozes and Goodnight times" }) { onOpen("week") }
 
         // ----- phone check -----
         SectionTitle("Phone check")

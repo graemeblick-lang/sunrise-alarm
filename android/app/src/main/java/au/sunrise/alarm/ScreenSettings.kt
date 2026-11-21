@@ -12,6 +12,12 @@ data class LookSettings(
     val dim: Int = 2,
     /** How bright the screen gets by alarm time, 15..100 %. */
     val sunMax: Int = 60,
+    /** The night clock's size: 0 normal, 1 large, 2 huge. */
+    val clockSize: Int = 0,
+    /** A bolder clock (easier to read without glasses). */
+    val clockBold: Boolean = false,
+    /** Show the date under the night clock. */
+    val nightDate: Boolean = false,
 ) {
     fun into(j: JSONObject) {
         j.put("theme", theme)
@@ -19,6 +25,9 @@ data class LookSettings(
         j.put("sunCols", JSONArray(sunCols))
         j.put("dim", dim)
         j.put("sunMax", sunMax)
+        j.put("clockSize", clockSize)
+        j.put("clockBold", clockBold)
+        j.put("nightDate", nightDate)
     }
 
     companion object {
@@ -32,6 +41,9 @@ data class LookSettings(
                 sunCols = cols,
                 dim = j.optInt("dim", d.dim).coerceIn(1, 6),
                 sunMax = j.optInt("sunMax", d.sunMax).coerceIn(15, 100),
+                clockSize = j.optInt("clockSize", 0).coerceIn(0, 2),
+                clockBold = j.optBoolean("clockBold", false),
+                nightDate = j.optBoolean("nightDate", false),
             )
         }
     }
@@ -84,11 +96,14 @@ data class NightSettings(
     val sleepTimer: Int = 30,
     /** A reminder this many hours before the next alarm. 0 = off. */
     val bedtime: Int = 0,
+    /** The night screen's sleep sound: "rain", "ocean" or "noise". */
+    val sleepSound: String = "rain",
 ) {
     fun into(j: JSONObject) {
         j.put("autoNight", autoNight)
         j.put("sleepTimer", sleepTimer)
         j.put("bedtime", bedtime)
+        j.put("sleepSound", sleepSound)
     }
 
     companion object {
@@ -102,6 +117,7 @@ data class NightSettings(
                 autoNight = j.optInt("autoNight", d.autoNight).takeIf { it in AUTO_NIGHT_HOURS } ?: 0,
                 sleepTimer = j.optInt("sleepTimer", d.sleepTimer).takeIf { it in SLEEP_TIMERS } ?: d.sleepTimer,
                 bedtime = j.optInt("bedtime", d.bedtime).takeIf { it in BEDTIME_HOURS } ?: 0,
+                sleepSound = j.optString("sleepSound", d.sleepSound).takeIf { it in NoisePlayer.KINDS } ?: d.sleepSound,
             )
         }
     }

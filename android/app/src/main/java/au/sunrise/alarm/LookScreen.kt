@@ -61,9 +61,14 @@ fun NightScreen(
         Hint(if (n.autoNight == 0) "Tap Goodnight on the home screen to start it."
              else "When the phone is on the charger after ${n.autoNight - 12} pm, the night clock starts by itself (once a night).")
 
+        SectionTitle("Sleep sound")
+        Choice(NoisePlayer.KINDS.indices.toList(), NoisePlayer.KINDS.indexOf(n.sleepSound).coerceAtLeast(0),
+            { NoisePlayer.NAMES.getValue(NoisePlayer.KINDS[it]) }) { updateNight(n.copy(sleepSound = NoisePlayer.KINDS[it])) }
+        Hint("Made by the app, so it works with no internet. Tap the screen at night, then the sound's button. It fades away as the sunrise starts.")
+
         SectionTitle("Sleep timer")
         Choice(NightSettings.SLEEP_TIMERS, n.sleepTimer, { if (it == 0) "Off" else "$it min" }) { updateNight(n.copy(sleepTimer = it)) }
-        Hint("Music you play from the night screen fades out after this long. Tap the timer on the night screen to change it for tonight.")
+        Hint("Music or sleep sounds you play from the night screen fade out after this long. Tap the timer on the night screen to change it for tonight.")
 
         SectionTitle("Bedtime reminder")
         Choice(NightSettings.BEDTIME_HOURS, n.bedtime, { if (it == 0) "Off" else "$it h" }) { updateNight(n.copy(bedtime = it)) }
@@ -94,6 +99,11 @@ fun NightScreen(
         ) { update(s.copy(dim = it.toInt())) }
 
         Hint("The clock stays this dim until the sunrise starts.")
+
+        SectionTitle("Clock")
+        Choice(listOf(0, 1, 2), s.clockSize, { listOf("Normal", "Large", "Huge")[it] }) { update(s.copy(clockSize = it)) }
+        SwitchRow("Bolder numbers", "Easier to read without glasses", s.clockBold) { update(s.copy(clockBold = it)) }
+        SwitchRow("Show the date", null, s.nightDate) { update(s.copy(nightDate = it)) }
     }
 }
 

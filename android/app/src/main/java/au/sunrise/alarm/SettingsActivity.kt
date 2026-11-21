@@ -29,7 +29,7 @@ import java.time.ZonedDateTime
  */
 class SettingsActivity : ComponentActivity() {
     companion object {
-        val PAGES = setOf("home", "alarm", "night", "sunrise", "morning", "sound", "stations")
+        val PAGES = setOf("home", "alarm", "night", "sunrise", "morning", "sound", "stations", "week")
         /** Something the page should do when you come back (e.g. "preview" the sunrise). */
         const val PREF_ACTION = "settingsAction"
     }
@@ -102,6 +102,7 @@ class SettingsActivity : ComponentActivity() {
                 spotifyClientId = BuildConfig.SPOTIFY_CLIENT_ID.ifEmpty { json.optString("spClient", "") },
                 onClose = back,
             )
+            "week" -> WeekScreen(AlarmLog.entries(this), DateFormat.is24HourFormat(this), onBack = back)
             "morning" -> MorningScreen(
                 initial = MorningSettings.from(json),
                 onChange = { s -> save { s.into(it) } },

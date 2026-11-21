@@ -114,14 +114,23 @@ private fun NightView(a: AlarmFlowActivity, theme: FullTheme) {
             .pointerInput(Unit) { detectTapGestures { a.showControls() } },
         contentAlignment = Alignment.Center,
     ) {
-        val clockSize = bigTextSize(maxWidth, 0.30f, 190f)
+        val look = a.look
+        val clockSize = when (look.clockSize) {
+            2 -> bigTextSize(maxWidth, 0.42f, 300f)
+            1 -> bigTextSize(maxWidth, 0.36f, 240f)
+            else -> bigTextSize(maxWidth, 0.30f, 190f)
+        }
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.offset(a.clockShift.first.dp, a.clockShift.second.dp),
         ) {
             Text(
-                clock(a.now, a.is24Hour), color = clockColour, fontWeight = FontWeight.ExtraLight,
+                clock(a.now, a.is24Hour), color = clockColour, fontWeight = if (look.clockBold) FontWeight.Normal else FontWeight.ExtraLight,
                 fontSize = clockSize, maxLines = 1,
+            )
+            if (look.nightDate) Text(
+                LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.getDefault())),
+                color = clockColour.copy(alpha = 0.85f), fontSize = 20.sp,
             )
             Text(
                 if (p > 0) "Rise and shine…" else "⏰ " + timeWithAmPm(a.alarmAt, a.is24Hour),
@@ -146,6 +155,13 @@ private fun NightView(a: AlarmFlowActivity, theme: FullTheme) {
                         NightButton(if (a.sleepUntil > 0) "⏲ Stops at " + timeWithAmPm(a.sleepUntil, a.is24Hour) else "⏲ Sleep timer off") {
                             a.cycleSleepTimer()
                         }
+                    }
+                }
+                if (a.mode == "night" && a.progress(a.now) == 0.0) {
+                    val name = NoisePlayer.NAMES.getValue(a.night.sleepSound)
+                    NightButton(if (a.noise.playing) "■ Stop ${name.lowercase()}" else "🌧 $name") { a.toggleSleepSound() }
+                    if (a.noise.playing) NightButton(if (a.sleepUntil > 0) "⏲ Stops at " + timeWithAmPm(a.sleepUntil, a.is24Hour) else "⏲ Sleep timer off") {
+                        a.cycleSleepTimer()
                     }
                 }
                 NightButton("☀ I'm up") { a.upFromNight() }

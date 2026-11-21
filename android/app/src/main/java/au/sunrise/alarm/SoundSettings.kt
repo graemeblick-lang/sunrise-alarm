@@ -43,8 +43,13 @@ data class SoundSettings(
     val spAppOk: Boolean = false,
     /** A Client ID saved by an older version (read only; the built-in one is preferred). */
     val spClient: String = "",
+    /** A different source at weekends ("" = same as weekdays). */
+    val weekendSrc: String = "",
 ) {
     /** Station names in the page's order, with "Custom stream…" last. */
+    /** On Saturdays and Sundays, wake to this instead ("" = the same as weekdays). [day]: 0 = Sunday … 6. */
+    fun forDay(day: Int): SoundSettings = if (weekendSrc in SOURCES && (day == 0 || day == 6)) copy(src = weekendSrc) else this
+
     fun stationNames(): List<String> = Stations.BUILT_IN.map { it.first } + myStations.map { it.name } + "Custom stream…"
     val customIndex: Int get() = Stations.BUILT_IN.size + myStations.size
 
@@ -73,6 +78,7 @@ data class SoundSettings(
         j.put("spName", spName)
         j.put("spShuffle", spShuffle)
         j.put("spAppOk", spAppOk)
+        j.put("weekendSrc", weekendSrc)
     }
 
     companion object {
@@ -104,6 +110,7 @@ data class SoundSettings(
                 spLink = j.optString("spLink", ""),
                 spName = j.optString("spName", ""),
                 spShuffle = j.optBoolean("spShuffle", d.spShuffle),
+                weekendSrc = j.optString("weekendSrc", "").takeIf { it in SOURCES } ?: "",
                 spAppOk = j.optBoolean("spAppOk", d.spAppOk),
                 spClient = j.optString("spClient", ""),
             )
