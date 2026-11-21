@@ -44,8 +44,8 @@ private val SOURCE_LABELS = mapOf(
 private val SPOTIFY_ERRORS = mapOf(
     "CouldNotFindSpotifyApp" to "The Spotify app isn't installed",
     "NotLoggedInException" to "Log in to the Spotify app first",
-    "UserNotAuthorizedException" to "Spotify didn't accept Sunrise. The one-time Spotify developer setup isn't finished (see the README)",
-    "AuthenticationFailedException" to "Spotify didn't accept Sunrise. The one-time Spotify developer setup isn't finished (see the README)",
+    "UserNotAuthorizedException" to "Spotify didn't accept Sunrise. Check the Spotify developer app's settings and User Management (see the README)",
+    "AuthenticationFailedException" to "Spotify didn't accept Sunrise. Check the Spotify developer app's settings and User Management (see the README)",
     "OfflineModeException" to "Spotify is in offline mode",
     "UnsupportedFeatureVersionException" to "Update the Spotify app",
 )
@@ -131,8 +131,16 @@ fun SoundScreen(
                         OutlinedButton(onClick = { update(s.copy(spAppOk = false)) }) { Text("Disconnect") }
                     } else if (canConnect) {
                         FilledTonalButton(onClick = {
-                            spotifyStatus = "Connecting… (Spotify may ask you to agree)"
+                            val waiting = "Connecting… (Spotify may ask you to agree)"
+                            spotifyStatus = waiting
                             spotifyRemote?.disconnect()
+                            // If Spotify never answers, say what to try instead of waiting forever
+                            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                                if (spotifyStatus == waiting) {
+                                    spotifyRemote?.disconnect()
+                                    spotifyStatus = "Spotify didn't answer. Open the Spotify app, check you're logged in, come back and tap Connect again."
+                                }
+                            }, 45_000)
                             spotifyRemote = SpotifyRemote { ev ->
                                 android.os.Handler(android.os.Looper.getMainLooper()).post {
                                     if (ev == "sr:connected") { spotifyStatus = null; update(latest.copy(spAppOk = true, src = "spotify")) }
@@ -142,7 +150,7 @@ fun SoundScreen(
                                         update(latest.copy(spAppOk = false))
                                     }
                                 }
-                            }.also { it.connect(context.applicationContext, spotifyClientId, true, null, false) }
+                            }.also { it.connect(context, spotifyClientId, true, null, false) }
                         }) { Text("Connect Spotify") }
                     }
                 }
