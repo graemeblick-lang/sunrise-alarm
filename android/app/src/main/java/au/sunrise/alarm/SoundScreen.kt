@@ -16,7 +16,13 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import android.app.Activity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import com.spotify.sdk.android.auth.AuthorizationClient
+import com.spotify.sdk.android.auth.AuthorizationRequest
+import com.spotify.sdk.android.auth.AuthorizationResponse
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -44,8 +50,8 @@ private val SOURCE_LABELS = mapOf(
 private val SPOTIFY_ERRORS = mapOf(
     "CouldNotFindSpotifyApp" to "The Spotify app isn't installed",
     "NotLoggedInException" to "Log in to the Spotify app first",
-    "UserNotAuthorizedException" to "Spotify didn't accept Sunrise. The one-time Spotify developer setup isn't finished (see the README)",
-    "AuthenticationFailedException" to "Spotify didn't accept Sunrise. The one-time Spotify developer setup isn't finished (see the README)",
+    "UserNotAuthorizedException" to "Spotify didn't accept Sunrise. Check the Spotify developer app's settings and User Management (see the README)",
+    "AuthenticationFailedException" to "Spotify didn't accept Sunrise. Check the Spotify developer app's settings and User Management (see the README)",
     "OfflineModeException" to "Spotify is in offline mode",
     "UnsupportedFeatureVersionException" to "Update the Spotify app",
 )
@@ -67,6 +73,42 @@ fun SoundScreen(
     var spotifyRemote by remember { mutableStateOf<SpotifyRemote?>(null) }
     DisposableEffect(Unit) { onDispose { spotifyRemote?.disconnect() } }
     var pasting by remember { mutableStateOf(false) }
+
+    /** After you agree in Spotify: connect App Remote (no pop-up needed now), with a time limit. */
+    fun connectSpotify() {
+        val waiting = "Connecting to Spotify…"
+        spotifyStatus = waiting
+        spotifyRemote?.disconnect()
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            if (spotifyStatus == waiting) {
+                spotifyRemote?.disconnect()
+                spotifyStatus = "Spotify didn't answer. Open the Spotify app, check you're logged in, come back and tap Connect again."
+            }
+        }, 45_000)
+        spotifyRemote = SpotifyRemote { ev ->
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                if (ev == "sr:connected") { spotifyStatus = null; update(latest.copy(spAppOk = true, src = "spotify")) }
+                else if (ev.startsWith("sr:error:")) {
+                    val code = ev.removePrefix("sr:error:")
+                    spotifyStatus = SPOTIFY_ERRORS[code] ?: "Spotify couldn't connect ($code)"
+                    update(latest.copy(spAppOk = false))
+                }
+            }
+        }.also { it.connect(context, spotifyClientId, true, null, false) }
+    }
+    val spotifyAuth = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val r = AuthorizationClient.getResponse(result.resultCode, result.data)
+        when (r.type) {
+            AuthorizationResponse.Type.CODE, AuthorizationResponse.Type.TOKEN -> connectSpotify()
+            AuthorizationResponse.Type.ERROR -> spotifyStatus = when (r.error) {
+                "INVALID_CLIENT", "invalid_client" -> "Spotify doesn't recognise Sunrise's Client ID. Check the developer app (see the README)"
+                "INVALID_REDIRECT_URI", "invalid_redirect_uri" -> "Spotify says the Redirect URI doesn't match. It must be au.sunrise.alarm://spotify-callback"
+                "access_denied", "AUTHENTICATION_SERVICE_UNAVAILABLE" -> "Spotify didn't allow it (${r.error}). Check User Management in the developer app"
+                else -> "Spotify said: ${r.error}"
+            }
+            else -> spotifyStatus = "Cancelled. Tap Connect Spotify to try again."
+        }
+    }
 
     SettingsScaffold("Wake-up sound", onBack) {
         SectionTitle("Play")
@@ -131,18 +173,13 @@ fun SoundScreen(
                         OutlinedButton(onClick = { update(s.copy(spAppOk = false)) }) { Text("Disconnect") }
                     } else if (canConnect) {
                         FilledTonalButton(onClick = {
-                            spotifyStatus = "Connecting… (Spotify may ask you to agree)"
-                            spotifyRemote?.disconnect()
-                            spotifyRemote = SpotifyRemote { ev ->
-                                android.os.Handler(android.os.Looper.getMainLooper()).post {
-                                    if (ev == "sr:connected") { spotifyStatus = null; update(latest.copy(spAppOk = true, src = "spotify")) }
-                                    else if (ev.startsWith("sr:error:")) {
-                                        val code = ev.removePrefix("sr:error:")
-                                        spotifyStatus = SPOTIFY_ERRORS[code] ?: "Spotify couldn't connect ($code)"
-                                        update(latest.copy(spAppOk = false))
-                                    }
-                                }
-                            }.also { it.connect(context.applicationContext, spotifyClientId, true, null, false) }
+                            // 1) Spotify's own agree screen (sign-in library), opened from here; 2) then App Remote connects
+                            spotifyStatus = "Opening Spotify to agree…"
+                            val req = AuthorizationRequest.Builder(spotifyClientId, AuthorizationResponse.Type.CODE, SpotifyRemote.REDIRECT_URI)
+                                .setScopes(arrayOf("app-remote-control"))
+                                .build()
+                            runCatching { spotifyAuth.launch(AuthorizationClient.createLoginActivityIntent(context as Activity, req)) }
+                                .onFailure { spotifyStatus = "Couldn't open Spotify (${it.javaClass.simpleName})" }
                         }) { Text("Connect Spotify") }
                     }
                 }

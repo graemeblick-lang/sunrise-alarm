@@ -21,7 +21,7 @@ The GitHub Pages site is only needed if you want to use Sunrise in a browser ins
 
 ### Spotify
 
-In the app: **Wake-up sound → Spotify → Connect Spotify** (once), then in Spotify open a playlist, album or song, tap **Share** and pick **Sunrise**. That's it. If the music can't start, Sunrise presses play in Spotify (what you last played), and if nothing plays, the chimes take over.
+In the app: **Wake-up sound → Spotify → Connect Spotify** (once: Spotify opens and asks you to agree), then in Spotify open a playlist, album or song, tap **Share** and pick **Sunrise**. That's it. If the music can't start, Sunrise presses play in Spotify (what you last played), and if nothing plays, the chimes take over.
 
 Spotify only lets an app start a chosen playlist if it's registered as a Spotify "developer app". That's a one-time job for whoever builds the app:
 
@@ -29,6 +29,8 @@ Spotify only lets an app start a chosen playlist if it's registered as a Spotify
    - Redirect URI: `au.sunrise.alarm://spotify-callback`
    - APIs used: **Android**
    - Android package: `au.sunrise.alarm`, SHA-1 fingerprint: `A0:00:4D:EE:71:42:49:C6:EB:0C:CF:24:2D:20:5D:3C:1B:94:D0:4A` (the app's release signing key)
+   - **User Management**: add your own name and the email of the Spotify account on your phone (apps in development mode only work for the accounts listed there).
+   - For each field, tap **Add**, then **Save** at the bottom.
 2. Copy its **Client ID**. In this GitHub repo: **Settings → Secrets and variables → Actions → Variables → New repository variable**, name `SPOTIFY_CLIENT_ID`.
 3. The next build has it built in. (Without it, Spotify still works but plays what you last played.)
 

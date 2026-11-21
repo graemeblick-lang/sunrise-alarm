@@ -20,7 +20,10 @@ final class SpotifyRemote {
 
     SpotifyRemote(Events e) { events = e; }
 
-    /** Connect (showing Spotify's permission screen the first time). If uri is set, start playing it. */
+    /**
+     * Connect (showing Spotify's permission screen the first time, which needs [c] to be an Activity).
+     * If uri is set, start playing it.
+     */
     void connect(Context c, String clientId, boolean showAuth, String uri, boolean shuffle) {
         try { SpotifyAppRemote.disconnect(remote); } catch (Exception ignored) { }
         ConnectionParams params = new ConnectionParams.Builder(clientId)
