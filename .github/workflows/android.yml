@@ -43,6 +43,11 @@ jobs:
             echo "KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
             echo "Signing with android/release.jks from the repo"
           else
+            # Never publish a normal release signed with a throwaway key: phones couldn't update to it
+            if [ "$GITHUB_EVENT_NAME" != "pull_request" ]; then
+              echo "::error::The KEYSTORE_PASSWORD and KEYSTORE_BASE64 secrets are missing, so the release can't be signed."
+              exit 1
+            fi
             PASS=$(openssl rand -hex 16)
             keytool -genkeypair -keystore android/app/release.jks -alias sunrise -keyalg RSA -keysize 2048 \
               -validity 10000 -storepass "$PASS" -keypass "$PASS" -dname "CN=Sunrise Alarm"
