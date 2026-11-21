@@ -56,4 +56,4 @@ For best results, tap **Fix** next to anything the Settings → Status card flag
   - Also: `Widgets.kt` (the widget and the Quick Settings tile), `AlarmLog.kt` (the wake-up log, the weekly view and settings backup) and `Secret.kt` (the Todoist token, encrypted).
 - Tests: `gradle testDebugUnitTest` runs the unit tests and the screen tests (Robolectric, `app/src/test/.../screens`), with no phone needed.
 - GitHub Actions runs the tests and builds the APK on every push to `main`, published as the `latest` Release. It does the same on pull requests: a pull request's APK goes to the **Test build** pre-release on the Releases page, one tap to install on the phone, and never replaces the normal release.
-- Signing: the `KEYSTORE_PASSWORD` secret, plus the key itself in the `KEYSTORE_BASE64` secret (preferred), or `android/release.jks` in the repo.
+- Signing: the key lives only in the `KEYSTORE_BASE64` secret, with its password in `KEYSTORE_PASSWORD` (it is no longer kept in the repo). Keep a copy of both somewhere safe: without them, updates can't install over the top.
