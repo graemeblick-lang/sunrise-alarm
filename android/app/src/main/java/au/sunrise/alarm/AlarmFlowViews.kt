@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -171,7 +172,26 @@ private fun NightView(a: AlarmFlowActivity, theme: FullTheme) {
             }
         }
 
+        if (a.preflight.isNotEmpty() && a.nightLight == 0) PreflightCard(a)
+
         if (a.nightLight > 0) NightLight(a, theme)
+    }
+}
+
+/** The pre-flight check found something that would stop tomorrow's sound working: say so tonight. */
+@Composable
+private fun BoxScope.PreflightCard(a: AlarmFlowActivity) {
+    Column(
+        Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(16.dp)
+            .clip(RoundedCornerShape(18.dp)).background(Color(0xE6281912)).padding(18.dp)
+            .semantics(mergeDescendants = false) { liveRegion = LiveRegionMode.Polite },
+    ) {
+        Text("Before you sleep", color = Color(0xFFFFD2A8), fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+        a.preflight.forEach { Text("⚠ $it", color = Color(0xFFE8C9AC), fontSize = 15.sp, modifier = Modifier.padding(top = 6.dp)) }
+        Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            NightButton("Fix it") { a.changeAlarm() }
+            NightButton("OK") { a.dismissPreflight() }
+        }
     }
 }
 
@@ -315,6 +335,20 @@ private fun MorningView(a: AlarmFlowActivity, theme: FullTheme) {
             )
             val woke = remember(a.morningRefresh) {
                 AlarmLog.entries(context).lastOrNull()?.takeIf { a.now - it.alarm in 0..12 * 3_600_000L }?.let { AlarmLog.line(it, a.is24Hour) } ?: ""
+            }
+            val rehearsal = remember(a.morningRefresh) {
+                AlarmLog.entries(context).lastOrNull()?.takeIf { it.rehearsal && a.now - it.alarm in 0..3_600_000L }
+            }
+            if (rehearsal != null) {
+                Card(theme, "Rehearsal") {
+                    val report = AlarmLog.rehearsalReport(rehearsal)
+                    report.forEach { (ok, what) ->
+                        Text((if (ok) "✓ " else "✗ ") + what, color = if (ok) ink else Color(0xFFB3261E), fontSize = 16.sp,
+                            modifier = Modifier.padding(vertical = 3.dp))
+                    }
+                    Text(if (report.all { it.first }) "All good: your alarm works on this phone." else "Fix the ✗ items, then rehearse again.",
+                        color = rgb(theme.v("mMuted")), fontSize = 15.sp, modifier = Modifier.padding(top = 6.dp))
+                }
             }
             if (woke.isNotEmpty()) Text("⏰ $woke", color = rgb(theme.v("mSub")), fontSize = 15.sp, modifier = Modifier.padding(top = 0.dp, bottom = 16.dp))
             if (a.sound.musicOn) {
