@@ -16,6 +16,8 @@ android {
         versionName "1." + (System.getenv("VERSION_CODE") ?: "1")
         // Your Spotify developer app's Client ID (not a secret), from the SPOTIFY_CLIENT_ID GitHub variable.
         // Lets the app start a chosen playlist in Spotify. Empty = Spotify still works, playing what you last played.
+        // Spotify's sign-in library returns to Sunrise on this address (au.sunrise.alarm://spotify-callback)
+        manifestPlaceholders = [redirectSchemeName: "au.sunrise.alarm", redirectHostName: "spotify-callback"]
         buildConfigField "String", "SPOTIFY_CLIENT_ID", "\"" + (System.getenv("SPOTIFY_CLIENT_ID") ?: "").replaceAll("[^A-Za-z0-9]", "") + "\""
     }
 
@@ -72,6 +74,9 @@ android {
 dependencies {
     // Spotify's official App Remote SDK (from github.com/spotify/android-sdk, Apache 2.0)
     implementation files("libs/spotify-app-remote-release-0.8.0.aar")
+    // Spotify's sign-in library (Maven Central): shows Spotify's "Agree" screen from Sunrise itself. Android won't let the
+    // Spotify app pop up its own permission screen for another app (App Remote's showAuthView just waits forever)
+    implementation "com.spotify.android:auth:2.1.1"
     implementation "com.google.code.gson:gson:2.10.1"
 
     // Native settings screens: Jetpack Compose with Material 3

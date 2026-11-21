@@ -21,7 +21,7 @@ The GitHub Pages site is only needed if you want to use Sunrise in a browser ins
 
 ### Spotify
 
-In the app: **Wake-up sound → Spotify → Connect Spotify** (once), then in Spotify open a playlist, album or song, tap **Share** and pick **Sunrise**. That's it. If the music can't start, Sunrise presses play in Spotify (what you last played), and if nothing plays, the chimes take over.
+In the app: **Wake-up sound → Spotify → Connect Spotify** (once: Spotify opens and asks you to agree), then in Spotify open a playlist, album or song, tap **Share** and pick **Sunrise**. That's it. If the music can't start, Sunrise presses play in Spotify (what you last played), and if nothing plays, the chimes take over.
 
 Spotify only lets an app start a chosen playlist if it's registered as a Spotify "developer app". That's a one-time job for whoever builds the app:
 
