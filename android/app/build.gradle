@@ -92,6 +92,7 @@ dependencies {
     // Screen tests: Compose's test rules, run on the computer by Robolectric (no phone or emulator needed)
     testImplementation platform("androidx.compose:compose-bom:2024.10.01")
     testImplementation "androidx.compose.ui:ui-test-junit4"
+    testImplementation "androidx.test:core:1.6.1"      // ActivityScenario: opens the real alarm screens in tests
     testImplementation "org.robolectric:robolectric:4.13"
     debugImplementation "androidx.compose.ui:ui-test-manifest"
     // Unit tests run against a stubbed android.jar whose org.json methods only throw "not mocked":

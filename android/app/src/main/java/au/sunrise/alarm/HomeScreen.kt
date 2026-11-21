@@ -83,6 +83,8 @@ fun HomeScreen(
 
     var editingTime by remember { mutableStateOf(false) }
     var testingBackup by remember { mutableStateOf(false) }
+    var rehearsing by remember { mutableStateOf(false) }
+    var rehearsalNote by remember { mutableStateOf<String?>(null) }
     var backupNote by remember { mutableStateOf<String?>(null) }
     var includeToken by remember { mutableStateOf(false) }
     val exportFile = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -271,9 +273,18 @@ fun HomeScreen(
         Hint("✓ Screen stays on and brightness is handled for you.")
         Hint("✓ Backup alarm: if the app ever fails to start ringing, the phone rings with its own alarm sound a minute later.")
         Hint("Leave the phone on charge overnight.")
+        AlarmLog.lastRehearsal(AlarmLog.entries(context))?.let { e ->
+            val report = AlarmLog.rehearsalReport(e)
+            val day = java.time.Instant.ofEpochMilli(e.alarm).atZone(now.zone).format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM"))
+            val bad = report.filter { !it.first }
+            if (e.rang > 0 || e.backup > 0) Hint(if (bad.isEmpty()) "✓ Last rehearsal ($day): everything worked."
+                                                 else "⚠ Last rehearsal ($day): " + bad.joinToString("; ") { it.second })
+        }
         Row(Modifier.padding(horizontal = 8.dp)) {
+            TextButton(onClick = { rehearsing = true }) { Text("Rehearse the alarm") }
             TextButton(onClick = { testingBackup = true }) { Text("Test the backup alarm") }
         }
+        rehearsalNote?.let { Hint(it) }
 
         // ----- settings backup -----
         SectionTitle("Your settings")
@@ -327,6 +338,30 @@ fun HomeScreen(
                 update(alarm.withOnce(at.toInstant().toEpochMilli(), System.currentTimeMillis()))
                 pickingOnce = false
             },
+        )
+    }
+
+    if (rehearsing) {
+        AlertDialog(
+            onDismissRequest = { rehearsing = false },
+            title = { Text("Rehearse the alarm?") },
+            text = {
+                Text("A real alarm in 2½ minutes, with a 1½-minute sunrise. Lock the phone and leave it, as you would at night. " +
+                    "Sunrise should open by itself, then ring. Turn it off as usual and the morning screen shows how it went." +
+                    if (alarm.onceAt(now) != null) "\n\nThis replaces your quick alarm." else "")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    rehearsing = false
+                    val t = System.currentTimeMillis()
+                    val at = t + 150_000
+                    update(alarm.copy(once = at, onceStart = t + 60_000, skip = if (alarm.skip == at) 0 else alarm.skip))
+                    AlarmLog.rehearsal(context, at)
+                    rehearsalNote = "Rehearsal set: lock the phone now. The sunrise starts in about a minute and it rings at " +
+                        HomeText.time(AlarmSettings.formatTime(java.time.Instant.ofEpochMilli(at).atZone(now.zone).toLocalTime()), is24Hour) + "."
+                }) { Text("Start") }
+            },
+            dismissButton = { TextButton(onClick = { rehearsing = false }) { Text("Cancel") } },
         )
     }
 

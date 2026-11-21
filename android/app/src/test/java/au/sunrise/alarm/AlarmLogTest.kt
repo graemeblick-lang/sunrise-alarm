@@ -46,6 +46,21 @@ class AlarmLogTest {
         assertEquals("", AlarmLog.weekSummary(emptyList(), now, false, mel))
     }
 
+    @Test fun rehearsalReport() {
+        val a = ms(19, 0)
+        val good = LogEntry(a, rang = a + 2_000, stopped = a + 60_000, opened = a - 90_000, locked = true, wanted = "spotify", played = "spotify", rehearsal = true)
+        assertEquals(listOf(true to "Opened by itself, over the lock screen", true to "Rang on time", true to "Played Spotify",
+            true to "The backup alarm wasn't needed"), AlarmLog.rehearsalReport(good))
+        val bad = good.copy(opened = 0, played = "chimes", backup = a + 61_000)
+        assertEquals(listOf(false, true, false, false), AlarmLog.rehearsalReport(bad).map { it.first })
+        assertEquals("Played the chimes instead of Spotify", AlarmLog.rehearsalReport(bad)[2].second)
+        assertEquals("Played your music app", AlarmLog.rehearsalReport(good.copy(wanted = "apps", played = "app"))[2].second)
+        // Rehearsals don't count in your week, and the latest one is found
+        assertEquals(emptyList<String>(), AlarmLog.weekRows(listOf(good), a + 3_600_000, false, mel))
+        assertEquals(good, AlarmLog.lastRehearsal(listOf(LogEntry(a - 86_400_000), good)))
+        assertEquals(good, AlarmLog.parse(AlarmLog.serialize(listOf(good))).single())
+    }
+
     @Test fun backupAndRestore() {
         val s = JSONObject("""{"time":"06:10","theme":"ocean","skip":5,"once":7,"holidayDates":{"2026-01-26":"Australia Day"},"spAppOk":true}""")
         val file = SettingsBackup.export(s)

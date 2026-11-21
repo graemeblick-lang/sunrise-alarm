@@ -8,6 +8,8 @@ A sunrise wake-up light and alarm for an old phone on a bedside stand.
 - Skips your state's public holidays, if you like
 - The night clock can start by itself when the phone goes on the charger; sleep timer for music; bedtime reminder
 - Home-screen widget and Quick Settings tile
+- Checks at Goodnight that tomorrow's sound will work (Spotify, the station, the music app, volume, battery)
+- Rehearse the alarm: a real 2½-minute test with the phone locked, with a report of what worked
 - Wake-up log, with a warning if the backup alarm ever had to ring; settings backup to a file
 - Morning screen with weather (Open-Meteo, including the chance of rain through the day), a button for the BOM Weather app, daylight times, today's calendar and Todoist tasks
 
@@ -56,6 +58,6 @@ For best results, tap **Fix** next to anything the Settings → Status card flag
   - The night, alarm and morning screens: `AlarmFlowActivity.kt` and `AlarmFlowViews.kt`. The wake-up sound is in `WakeSound.kt`, the sleep sounds in `NoisePlayer.kt`, the sunrise maths in `Sunrise.kt` and the morning data in `MorningData.kt` and `CalendarData.kt`.
   - The schedule: `AlarmSettings.kt` (next alarm and plan), `AlarmScheduler.java` (Android alarms and the backup alarm), `Evening.kt` (bedtime reminder, auto-Goodnight) and `Holidays.kt`.
   - Also: `Widgets.kt` (the widget and the Quick Settings tile), `AlarmLog.kt` (the wake-up log, the weekly view and settings backup) and `Secret.kt` (the Todoist token, encrypted).
-- Tests: `gradle testDebugUnitTest` runs the unit tests and the screen tests (Robolectric, `app/src/test/.../screens`), with no phone needed.
+- Tests: `gradle testDebugUnitTest` runs the unit tests and the screen tests (Robolectric, `app/src/test/.../screens`: the settings screens and the real night, alarm and morning screens), with no phone needed.
 - GitHub Actions runs the tests and builds the APK on every push to `main`, published as the `latest` Release. It does the same on pull requests: a pull request's APK goes to the **Test build** pre-release on the Releases page, one tap to install on the phone, and never replaces the normal release.
 - Signing: the key lives only in the `KEYSTORE_BASE64` secret, with its password in `KEYSTORE_PASSWORD` (it is no longer kept in the repo). Keep a copy of both somewhere safe: without them, updates can't install over the top.

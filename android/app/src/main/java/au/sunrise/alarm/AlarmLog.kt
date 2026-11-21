@@ -16,6 +16,14 @@ data class LogEntry(
     val backup: Long = 0,
     /** When the night screen started (Goodnight) for this alarm. */
     val night: Long = 0,
+    /** When Sunrise opened by itself for it (the sunrise starting), and whether the phone was locked then. */
+    val opened: Long = 0,
+    val locked: Boolean = false,
+    /** The sound it should have played ("spotify", "radio", "apps", "chimes") and what actually played. */
+    val wanted: String = "",
+    val played: String = "",
+    /** A rehearsal (Home → Rehearse the alarm), not a real alarm. */
+    val rehearsal: Boolean = false,
 )
 
 /**
@@ -30,12 +38,14 @@ object AlarmLog {
         val a = JSONArray(json ?: "[]")
         (0 until a.length()).map { i ->
             val o = a.getJSONObject(i)
-            LogEntry(o.optLong("alarm"), o.optLong("rang"), o.optInt("snoozes"), o.optLong("stopped"), o.optLong("backup"), o.optLong("night"))
+            LogEntry(o.optLong("alarm"), o.optLong("rang"), o.optInt("snoozes"), o.optLong("stopped"), o.optLong("backup"), o.optLong("night"),
+                o.optLong("opened"), o.optBoolean("locked"), o.optString("wanted"), o.optString("played"), o.optBoolean("rehearsal"))
         }
     }.getOrDefault(emptyList())
 
     fun serialize(list: List<LogEntry>): String = JSONArray(list.takeLast(KEEP).map {
         JSONObject().put("alarm", it.alarm).put("rang", it.rang).put("snoozes", it.snoozes).put("stopped", it.stopped).put("backup", it.backup).put("night", it.night)
+            .put("opened", it.opened).put("locked", it.locked).put("wanted", it.wanted).put("played", it.played).put("rehearsal", it.rehearsal)
     }).toString()
 
     /** Change (or add) the entry for [alarm]. */
@@ -55,6 +65,9 @@ object AlarmLog {
     @JvmStatic fun rang(c: Context, alarm: Long, at: Long) = edit(c, alarm) { if (it.rang == 0L) it.copy(rang = at) else it }
     @JvmStatic fun snoozed(c: Context, alarm: Long) = edit(c, alarm) { it.copy(snoozes = it.snoozes + 1) }
     @JvmStatic fun stopped(c: Context, alarm: Long, at: Long) = edit(c, alarm) { if (it.rang > 0 && it.stopped == 0L) it.copy(stopped = at) else it }
+    @JvmStatic fun opened(c: Context, alarm: Long, at: Long, locked: Boolean) = edit(c, alarm) { if (it.opened == 0L) it.copy(opened = at, locked = locked) else it }
+    @JvmStatic fun sound(c: Context, alarm: Long, wanted: String, played: String) = edit(c, alarm) { it.copy(wanted = wanted, played = played) }
+    fun rehearsal(c: Context, alarm: Long) = edit(c, alarm) { it.copy(rehearsal = true) }
     @JvmStatic fun night(c: Context, alarm: Long, at: Long) = edit(c, alarm) { if (it.night == 0L) it.copy(night = at) else it }
     @JvmStatic fun backup(c: Context, alarm: Long, at: Long) = edit(c, alarm) { if (it.backup == 0L) it.copy(backup = at) else it }
 
@@ -73,7 +86,7 @@ object AlarmLog {
     /** The last 7 days, newest first: one line per alarm ("Mon · rang 6:30 am · up 6:41 am · Goodnight 10:42 pm"). */
     fun weekRows(list: List<LogEntry>, nowMs: Long, is24Hour: Boolean, zone: ZoneId = ZoneId.systemDefault()): List<String> {
         fun t(ms: Long) = HomeText.time(AlarmSettings.formatTime(Instant.ofEpochMilli(ms).atZone(zone).toLocalTime()), is24Hour)
-        return list.filter { nowMs - it.alarm in 0..7 * 86_400_000L && (it.rang > 0 || it.backup > 0 || it.night > 0) }
+        return list.filter { !it.rehearsal && nowMs - it.alarm in 0..7 * 86_400_000L && (it.rang > 0 || it.backup > 0 || it.night > 0) }
             .sortedByDescending { it.alarm }
             .map { e ->
                 val day = Instant.ofEpochMilli(e.alarm).atZone(zone).dayOfWeek.getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.ENGLISH)
@@ -89,7 +102,7 @@ object AlarmLog {
 
     /** "Up 9 min after the alarm on average · 0.7 snoozes · Goodnight around 10:40 pm, give or take 25 min", or "". */
     fun weekSummary(list: List<LogEntry>, nowMs: Long, is24Hour: Boolean, zone: ZoneId = ZoneId.systemDefault()): String {
-        val week = list.filter { nowMs - it.alarm in 0..7 * 86_400_000L }
+        val week = list.filter { !it.rehearsal && nowMs - it.alarm in 0..7 * 86_400_000L }
         val parts = ArrayList<String>()
         val up = week.filter { it.rang > 0 && it.stopped > 0 }
         if (up.isNotEmpty()) {
@@ -109,6 +122,32 @@ object AlarmLog {
         }
         return parts.joinToString(" · ")
     }
+
+    /** How a rehearsal went: (passed, what) for each step. */
+    fun rehearsalReport(e: LogEntry): List<Pair<Boolean, String>> {
+        val names = mapOf("spotify" to "Spotify", "radio" to "the radio", "apps" to "your music app", "app" to "your music app", "chimes" to "the chimes")
+        val out = ArrayList<Pair<Boolean, String>>()
+        out += if (e.opened > 0) true to ("Opened by itself" + if (e.locked) ", over the lock screen" else "")
+               else false to "Didn't open by itself at sunrise. Fix anything under Phone check (full-screen notifications, battery saving)."
+        out += when {
+            e.rang == 0L -> false to "Didn't ring"
+            e.rang - e.alarm > 90_000 -> false to "Rang late (${(e.rang - e.alarm) / 60_000} min)"
+            else -> true to "Rang on time"
+        }
+        if (e.wanted.isNotEmpty()) {
+            val wanted = if (e.wanted == "apps") "app" else e.wanted
+            out += when {
+                e.played.isEmpty() -> false to "No sound was playing"
+                e.played == wanted || (wanted == "chimes" && e.played == "chimes") -> true to "Played ${names[e.played] ?: e.played}"
+                else -> false to "Played ${names[e.played] ?: e.played} instead of ${names[wanted] ?: wanted}"
+            }
+        }
+        out += if (e.backup > 0) false to "The backup alarm had to ring" else true to "The backup alarm wasn't needed"
+        return out
+    }
+
+    /** The latest rehearsal, if any. */
+    fun lastRehearsal(list: List<LogEntry>): LogEntry? = list.filter { it.rehearsal }.maxByOrNull { it.alarm }
 
     /** The latest alarm in the last 3 days that needed the backup alarm, unless already dismissed. */
     fun problem(list: List<LogEntry>, nowMs: Long, dismissed: Long): LogEntry? =
