@@ -4,7 +4,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * The built-in stations, in the page's order (STATIONS in index.html; tests/stations.test.js checks they match).
+ * The built-in stations, in the page's order.
  * Each has links to try in order: the ABC's current HLS streams first, older MP3 links as backup.
  */
 object Stations {

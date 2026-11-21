@@ -1,7 +1,0 @@
-/* Fonts bundled with the app (SIL Open Font License, see fonts/), so nothing loads from Google at night. */
-@font-face { font-family: "Outfit"; font-style: normal; font-display: swap; font-weight: 200; src: url(fonts/outfit-latin-200-normal.woff2) format("woff2"); }
-@font-face { font-family: "Outfit"; font-style: normal; font-display: swap; font-weight: 300; src: url(fonts/outfit-latin-300-normal.woff2) format("woff2"); }
-@font-face { font-family: "Outfit"; font-style: normal; font-display: swap; font-weight: 400; src: url(fonts/outfit-latin-400-normal.woff2) format("woff2"); }
-@font-face { font-family: "Outfit"; font-style: normal; font-display: swap; font-weight: 600; src: url(fonts/outfit-latin-600-normal.woff2) format("woff2"); }
-/* Variable: weight 100–1000 and optical size 8–144 */
-@font-face { font-family: "Roboto Flex"; font-style: normal; font-display: swap; font-weight: 100 1000; src: url(fonts/roboto-flex-latin-opsz-normal.woff2) format("woff2-variations"), url(fonts/roboto-flex-latin-opsz-normal.woff2) format("woff2"); }

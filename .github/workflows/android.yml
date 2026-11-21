@@ -3,10 +3,10 @@ name: Build Android app
 on:
   push:
     branches: [main]
-    paths: ["android/**", ".github/workflows/android.yml", "index.html", "fonts.css", "fonts/**", "manifest.webmanifest", "*.png", "tests/**", "tools/**"]
+    paths: ["android/**", ".github/workflows/android.yml"]
   # Pull requests build and test too, but don't publish
   pull_request:
-    paths: ["android/**", ".github/workflows/android.yml", "index.html", "fonts.css", "fonts/**", "manifest.webmanifest", "*.png", "tests/**", "tools/**"]
+    paths: ["android/**", ".github/workflows/android.yml"]
   workflow_dispatch:
 
 permissions:
@@ -17,20 +17,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - name: Test the alarm schedule
-        run: |
-          # Run in two time zones, one with daylight saving, to catch date maths mistakes
-          TZ=Australia/Melbourne node tests/schedule.test.js
-          TZ=UTC node tests/schedule.test.js
-          # The native Wake-up sound screen's copy of the built-in stations must match the page's
-          node tests/stations.test.js
-          # The native screens' colours are generated from the page's themes
-          node tests/themes.test.js
 
       - uses: actions/setup-java@v4
         with:

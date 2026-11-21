@@ -11,11 +11,9 @@ A sunrise wake-up light and alarm for an old phone on a bedside stand.
 - Wake-up log, with a warning if the backup alarm ever had to ring; settings backup to a file
 - Morning screen with weather (Open-Meteo, including the chance of rain through the day), a button for the BOM Weather app, daylight times, today's calendar and Todoist tasks
 
-Open https://graemeblick-lang.github.io/sunrise-alarm/ in Chrome on Android, then ⋮ → Add to home screen → Install.
-
 ## Android app
 
-The Android app is a native app (Jetpack Compose, Material 3) and nothing loads from the website. It opens itself at sunrise (even over the lock screen), keeps the screen on, controls brightness, plays radio in the background and rings a backup alarm.
+Sunrise is a native Android app (Jetpack Compose, Material 3). (There used to be a browser version too; it has been retired.) It opens itself at sunrise (even over the lock screen), keeps the screen on, controls brightness, plays radio in the background and rings a backup alarm.
 
 GitHub builds it automatically. Download `SunriseAlarm.apk` from the latest Release on your phone and open it to install. After that, the app tells you on its main screen when a newer version is ready (it checks GitHub Releases at most twice a day, never near an alarm).
 
@@ -51,10 +49,11 @@ For best results, tap **Fix** next to anything the Settings → Status card flag
 
 ## Development
 
-- The Android app is fully native: there is no web page inside it. `index.html` is only the browser version, and the source the native colours and built-in stations are checked against.
-- The app opens on a native home screen (`HomeScreen.kt`, in `SettingsActivity.kt`, Jetpack Compose with Material 3). The night, alarm and morning screens are native too (`AlarmFlowActivity.kt`, `AlarmFlowViews.kt`), with the wake-up sound in `WakeSound.kt`, the sunrise maths in `Sunrise.kt` (colours generated from the page by `tools/gen-theme-data.js`, checked by `tests/themes.test.js`) and the morning data in `MorningData.kt`. Android computes and keeps the alarm schedule itself (`AlarmSettings.plan`, checked against the page's `alarmPlan`). The home screen has the alarm card (time, days, skip, pause) and quick one-off alarms; the settings follow the night: Night and Sunrise (`LookScreen.kt`), Wake-up sound (`SoundScreen.kt`, `StationsScreen.kt`) and Morning (`MorningScreen.kt`), with the detailed Schedule in `AlarmScreen.kt`, with shared parts in `SettingsUi.kt` and `Themes.kt`.  The native Test sound (`SoundTester.kt`, `ChimePlayer.kt`) plays every source natively. `tests/stations.test.js` checks the native copy of the built-in stations matches the page. Settings are kept in one store (`SettingsStore.kt`, the same JSON format the page uses). The native next-alarm logic (`AlarmSettings.kt`) has unit tests matching the JavaScript ones, and the settings screens have screen tests that run on the computer with Robolectric (`app/src/test/.../screens`): `gradle testDebugUnitTest`.
-- Fonts are bundled from Fontsource (SIL Open Font License, see `fonts/`).
-- The alarm schedule logic sits between the `schedule:start` and `schedule:end` markers and is tested by `tests/schedule.test.js`:
-  `TZ=Australia/Melbourne node tests/schedule.test.js`
-- GitHub Actions runs the tests and builds the APK on every push to `main` (published as the `latest` Release) and on pull requests. A pull request's APK goes to the **Test build** pre-release on the Releases page (one tap to install on the phone); it never replaces the normal release.
-- Signing: set the `KEYSTORE_PASSWORD` secret. Optionally also set `KEYSTORE_BASE64` (`base64 -w0 android/release.jks`) and then `android/release.jks` can be deleted from the repo.
+- Everything is in `android/` (Kotlin and a little Java):
+  - Home and settings: `SettingsActivity.kt` and `HomeScreen.kt` (the alarm card and quick alarms). The settings follow the night: Night and Sunrise (`LookScreen.kt`), Wake-up sound (`SoundScreen.kt`, `StationsScreen.kt`) and Morning (`MorningScreen.kt`). The detailed Schedule is in `AlarmScreen.kt`. Shared parts are in `SettingsUi.kt` and `Themes.kt`, and the colour themes in `ThemeData.kt`.
+  - The night, alarm and morning screens: `AlarmFlowActivity.kt` and `AlarmFlowViews.kt`. The wake-up sound is in `WakeSound.kt`, the sleep sounds in `NoisePlayer.kt`, the sunrise maths in `Sunrise.kt` and the morning data in `MorningData.kt` and `CalendarData.kt`.
+  - The schedule: `AlarmSettings.kt` (next alarm and plan), `AlarmScheduler.java` (Android alarms and the backup alarm), `Evening.kt` (bedtime reminder, auto-Goodnight) and `Holidays.kt`.
+  - Also: `Widgets.kt` (the widget and the Quick Settings tile), `AlarmLog.kt` (the wake-up log, the weekly view and settings backup) and `Secret.kt` (the Todoist token, encrypted).
+- Tests: `gradle testDebugUnitTest` runs the unit tests and the screen tests (Robolectric, `app/src/test/.../screens`), with no phone needed.
+- GitHub Actions runs the tests and builds the APK on every push to `main`, published as the `latest` Release. It does the same on pull requests: a pull request's APK goes to the **Test build** pre-release on the Releases page, one tap to install on the phone, and never replaces the normal release.
+- Signing: the `KEYSTORE_PASSWORD` secret, plus the key itself in the `KEYSTORE_BASE64` secret (preferred), or `android/release.jks` in the repo.
