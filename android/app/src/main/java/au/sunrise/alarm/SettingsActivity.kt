@@ -49,6 +49,8 @@ class SettingsActivity : ComponentActivity() {
         single = page != null
         route = savedInstanceState?.getString("route") ?: page ?: "home"
         themeKey = SettingsStore.read(this).optString("theme", "sunrise")
+        // A Todoist token saved by an older version is encrypted now
+        runCatching { SettingsStore.update(this) { j -> if (!Secret.isSealed(j.optString("todoToken", ""))) MorningSettings.from(j).into(j) } }
         takeShare(intent)
         // Android 13+: notifications are how the app opens itself at sunrise
         if (android.os.Build.VERSION.SDK_INT >= 33 &&

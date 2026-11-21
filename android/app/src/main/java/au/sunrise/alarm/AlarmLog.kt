@@ -123,9 +123,11 @@ object SettingsBackup {
     /** Belong to this phone or this moment, so they're not backed up. */
     private val SKIP = setOf("skip", "handled", "once", "onceStart", "holidayDates", "spAppOk", "spClient")
 
-    fun export(settings: JSONObject): String {
+    /** The backup file. The Todoist token only if [withToken] (decrypted, since the phone's key can't move). */
+    fun export(settings: JSONObject, withToken: Boolean = false): String {
         val out = JSONObject().put("sunriseBackup", 1)
-        settings.keys().forEach { k -> if (k !in SKIP) out.put(k, settings.get(k)) }
+        settings.keys().forEach { k -> if (k !in SKIP && k != "todoToken") out.put(k, settings.get(k)) }
+        if (withToken) MorningSettings.from(settings).todoToken.takeIf { it.isNotEmpty() }?.let { out.put("todoToken", it) }
         return out.toString(2)
     }
 
@@ -135,6 +137,7 @@ object SettingsBackup {
         if (b.optInt("sunriseBackup", 0) != 1) return null
         val out = JSONObject(current.toString())
         b.keys().forEach { k -> if (k !in SKIP && k != "sunriseBackup") out.put(k, b.get(k)) }
+        MorningSettings.from(out).into(out)          // encrypt a restored token again
         return out
     }
 }

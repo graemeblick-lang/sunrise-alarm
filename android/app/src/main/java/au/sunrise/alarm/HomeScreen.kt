@@ -84,9 +84,10 @@ fun HomeScreen(
     var editingTime by remember { mutableStateOf(false) }
     var testingBackup by remember { mutableStateOf(false) }
     var backupNote by remember { mutableStateOf<String?>(null) }
+    var includeToken by remember { mutableStateOf(false) }
     val exportFile = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) backupNote = runCatching {
-            context.contentResolver.openOutputStream(uri, "wt")!!.use { it.write(SettingsBackup.export(SettingsStore.read(context)).toByteArray()) }
+            context.contentResolver.openOutputStream(uri, "wt")!!.use { it.write(SettingsBackup.export(SettingsStore.read(context), includeToken).toByteArray()) }
             "Settings saved."
         }.getOrElse { "Couldn't save the file." }
     }
@@ -276,7 +277,10 @@ fun HomeScreen(
 
         // ----- settings backup -----
         SectionTitle("Your settings")
-        Hint("Save them to a file (for a new phone, or before reinstalling). The file includes your Todoist token, if you set one.")
+        Hint("Save them to a file (for a new phone, or before reinstalling).")
+        if (MorningSettings.from(json).todoToken.isNotEmpty()) {
+            SwitchRow("Include the Todoist token", "Off: you'll type it in again after restoring", includeToken) { includeToken = it }
+        }
         Row(Modifier.padding(horizontal = 8.dp)) {
             TextButton(onClick = { exportFile.launch("sunrise-settings.json") }) { Text("Back up") }
             TextButton(onClick = { importFile.launch(arrayOf("application/json", "text/plain", "*/*")) }) { Text("Restore") }

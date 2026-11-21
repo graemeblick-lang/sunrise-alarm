@@ -55,6 +55,9 @@ class AlarmLogTest {
         assertEquals("06:10", restored.getString("time")); assertEquals("ocean", restored.getString("theme"))
         assertEquals(9, restored.getInt("skip")); assertEquals(true, restored.getBoolean("spAppOk"))
         assertNull(SettingsBackup.restore(JSONObject(), """{"time":"06:10"}"""))
+        val withToken = JSONObject("""{"time":"06:10","todoToken":"abc"}""")
+        assertEquals(false, JSONObject(SettingsBackup.export(withToken)).has("todoToken"))
+        assertEquals("abc", JSONObject(SettingsBackup.export(withToken, withToken = true)).getString("todoToken"))
         assertNull(SettingsBackup.restore(JSONObject(), "hello"))
     }
 }

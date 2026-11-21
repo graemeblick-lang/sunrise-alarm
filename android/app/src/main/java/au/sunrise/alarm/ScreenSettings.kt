@@ -63,7 +63,7 @@ data class MorningSettings(
         j.put("lon", lon)
         j.put("place", place)
         j.remove("weatherLink"); j.remove("willy")   // no longer used
-        j.put("todoToken", todoToken)
+        j.put("todoToken", Secret.seal(todoToken))       // encrypted on the phone
         j.put("calendar", calendar)
     }
 
@@ -74,7 +74,7 @@ data class MorningSettings(
                 lat = j.optDouble("lat", d.lat).takeIf { !it.isNaN() } ?: d.lat,
                 lon = j.optDouble("lon", d.lon).takeIf { !it.isNaN() } ?: d.lon,
                 place = j.optString("place", d.place).ifEmpty { d.place },
-                todoToken = j.optString("todoToken", ""),
+                todoToken = Secret.open(j.optString("todoToken", "")),
                 calendar = j.optBoolean("calendar", false),
             )
         }

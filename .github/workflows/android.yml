@@ -37,9 +37,11 @@ jobs:
           if [ -n "$KEYSTORE_PASSWORD" ] && [ -n "$KEYSTORE_BASE64" ]; then
             echo "$KEYSTORE_BASE64" | base64 -d > android/app/release.jks
             echo "KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "Signing with the key from the KEYSTORE_BASE64 secret"
           elif [ -n "$KEYSTORE_PASSWORD" ]; then
             cp android/release.jks android/app/release.jks
             echo "KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "Signing with android/release.jks from the repo"
           else
             PASS=$(openssl rand -hex 16)
             keytool -genkeypair -keystore android/app/release.jks -alias sunrise -keyalg RSA -keysize 2048 \
