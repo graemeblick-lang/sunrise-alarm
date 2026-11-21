@@ -220,6 +220,13 @@ fun SoundScreen(
 
         SectionTitle("Snooze")
         Choice(AlarmSettings.SNOOZE_LENGTHS, snoozeLen, { "$it min" }) { snoozeLen = it; onSnooze(it) }
+
+        SectionTitle("Weekends")
+        val weekendOptions = listOf("") + SoundSettings.SOURCES
+        Choice(weekendOptions.indices.toList(), weekendOptions.indexOf(s.weekendSrc).coerceAtLeast(0),
+            { listOf("Same", "Chimes", "Radio", "Spotify", "App")[it] }) { update(s.copy(weekendSrc = weekendOptions[it])) }
+        Hint(if (s.weekendSrc.isEmpty()) "Saturdays and Sundays wake to the same as weekdays."
+             else "Saturdays and Sundays wake to this instead. It uses the station, playlist or app chosen above (pick it under Play to change it, then switch back).")
     }
 }
 

@@ -63,7 +63,9 @@ object HomeText {
             else -> "Chimes"
         }
         return "$src · fade ${s.fade} min" + (if (s.earlyMin > 0 && s.src != "chimes") " · starts ${s.earlyMin} min early" else "") +
-            " · snooze $snooze min"
+            " · snooze $snooze min" + (if (s.weekendSrc.isNotEmpty() && s.weekendSrc != s.src) " · weekends: " + when (s.weekendSrc) {
+                "radio" -> "radio"; "spotify" -> "Spotify"; "apps" -> s.appName.ifEmpty { "music app" }; else -> "chimes"
+            } else "")
     }
 
     private fun themeName(s: LookSettings) = if (s.theme == Themes.PHONE) "Phone colours" else Themes.byKey(s.theme).name

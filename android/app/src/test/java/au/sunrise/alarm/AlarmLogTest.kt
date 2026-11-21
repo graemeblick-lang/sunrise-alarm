@@ -32,6 +32,20 @@ class AlarmLogTest {
         assertNull(AlarmLog.problem(log, ms(9, 0, 25), 0))          // more than 3 days ago
     }
 
+    @Test fun yourWeek() {
+        val log = listOf(
+            LogEntry(ms(6, 30, 21), rang = ms(6, 30, 21), snoozes = 1, stopped = ms(6, 45, 21), night = ms(22, 30, 20)),
+            LogEntry(ms(6, 30, 22), rang = ms(6, 30, 22), snoozes = 0, stopped = ms(6, 35, 22), night = ms(23, 10, 21)),
+            LogEntry(ms(6, 30, 23), night = ms(0, 10, 23)),      // went to bed after midnight; alarm not yet rung
+        )
+        val now = ms(7, 0, 23)
+        assertEquals(listOf("Mon · Goodnight 12:10 am", "Sun · rang 6:30 am · up 6:35 am · Goodnight 11:10 pm",
+            "Sat · rang 6:30 am · snoozed once · up 6:45 am · Goodnight 10:30 pm"), AlarmLog.weekRows(log, now, false, mel))
+        assertEquals("Up 10 min after the alarm on average · 0.5 snoozes · Goodnight around 11:17 pm, give or take 36 min",
+            AlarmLog.weekSummary(log, now, false, mel))
+        assertEquals("", AlarmLog.weekSummary(emptyList(), now, false, mel))
+    }
+
     @Test fun backupAndRestore() {
         val s = JSONObject("""{"time":"06:10","theme":"ocean","skip":5,"once":7,"holidayDates":{"2026-01-26":"Australia Day"},"spAppOk":true}""")
         val file = SettingsBackup.export(s)
@@ -41,6 +55,9 @@ class AlarmLogTest {
         assertEquals("06:10", restored.getString("time")); assertEquals("ocean", restored.getString("theme"))
         assertEquals(9, restored.getInt("skip")); assertEquals(true, restored.getBoolean("spAppOk"))
         assertNull(SettingsBackup.restore(JSONObject(), """{"time":"06:10"}"""))
+        val withToken = JSONObject("""{"time":"06:10","todoToken":"abc"}""")
+        assertEquals(false, JSONObject(SettingsBackup.export(withToken)).has("todoToken"))
+        assertEquals("abc", JSONObject(SettingsBackup.export(withToken, withToken = true)).getString("todoToken"))
         assertNull(SettingsBackup.restore(JSONObject(), "hello"))
     }
 }

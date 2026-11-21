@@ -293,3 +293,27 @@ private fun repeatSummary(days: Set<Int>): String = when {
     days == setOf(0, 6) -> "Weekends"
     else -> WEEK_ORDER.filter { it in days }.joinToString(", ") { DAY_NAMES[it].take(3) }
 }
+
+// ---------- Your week: the wake-up log ----------
+
+@Composable
+fun WeekScreen(entries: List<LogEntry>, is24Hour: Boolean, onBack: () -> Unit) {
+    val now = System.currentTimeMillis()
+    val rows = AlarmLog.weekRows(entries, now, is24Hour)
+    val summary = AlarmLog.weekSummary(entries, now, is24Hour)
+    SettingsScaffold("Your week", onBack) {
+        if (summary.isNotEmpty()) {
+            Surface(
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                shape = MaterialTheme.shapes.large,
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+            ) {
+                Text(summary, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(20.dp))
+            }
+        }
+        SectionTitle("The last 7 days")
+        if (rows.isEmpty()) Hint("Nothing yet. After a few alarms (and Goodnights), they show up here.")
+        rows.forEach { ListItem(headlineContent = { Text(it) }) }
+        Hint("Kept only on this phone.")
+    }
+}

@@ -41,5 +41,21 @@ class ScreenSettingsTest {
         assertEquals(false, j.has("willy")); assertEquals(false, j.has("weatherLink"))
     }
 
+    @Test fun clockAndSleepSoundSettings() {
+        val j = JSONObject(); LookSettings(clockSize = 2, clockBold = true, nightDate = true).into(j)
+        assertEquals(LookSettings(clockSize = 2, clockBold = true, nightDate = true), LookSettings.from(j))
+        assertEquals(2, LookSettings.from(JSONObject("""{"clockSize":9}""")).clockSize)
+        assertEquals("rain", NightSettings.from(JSONObject("""{"sleepSound":"whale"}""")).sleepSound)
+        assertEquals("ocean", NightSettings.from(JSONObject("""{"sleepSound":"ocean"}""")).sleepSound)
+    }
+
+    @Test fun weekendSound() {
+        val s = SoundSettings(src = "radio", weekendSrc = "chimes")
+        assertEquals("chimes", s.forDay(0).src); assertEquals("chimes", s.forDay(6).src); assertEquals("radio", s.forDay(3).src)
+        assertEquals("radio", SoundSettings(src = "radio").forDay(6).src)
+        val j = JSONObject(); s.into(j); assertEquals("chimes", SoundSettings.from(j).weekendSrc)
+        assertEquals("📻 triple j · fade 3 min · snooze 9 min · weekends: chimes", HomeText.sound(s.copy(station = 1), 9))
+    }
+
     @Test fun roundsToThreeDecimals() = assertEquals(-37.815, MorningSettings.round3(-37.81462), 0.0)
 }
