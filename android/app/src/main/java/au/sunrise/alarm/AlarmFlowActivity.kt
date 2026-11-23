@@ -68,6 +68,9 @@ class AlarmFlowActivity : ComponentActivity() {
     /** Bumps when the sound starts or stops, so the screen re-reads [sound]. */
     var soundChanged by mutableIntStateOf(0)
         private set
+    /** Problems the pre-flight check found when the night started (shown on the night screen). */
+    var preflight by mutableStateOf<List<String>>(emptyList())
+        private set
     /** Music started from the night screen fades out at this time (0 = no sleep timer). */
     var sleepUntil by mutableLongStateOf(0L)
         private set
@@ -88,6 +91,8 @@ class AlarmFlowActivity : ComponentActivity() {
     private var weatherPrefetched = false
     private var nightLightOffAt = 0L
     private var lastBrightness = -1f
+    /** What actually played while ringing (for the wake-up log and rehearsals). */
+    private var lastPlayed = ""
 
     val alarm get() = AlarmSettings.from(settings)
     val look get() = LookSettings.from(settings)
@@ -141,7 +146,7 @@ class AlarmFlowActivity : ComponentActivity() {
     private fun handle(i: Intent?): Boolean {
         if (i == null) return false
         when (i.getStringExtra("start")) {
-            "goodnight" -> { i.removeExtra("start"); enterNight(false); return true }
+            "goodnight" -> { i.removeExtra("start"); enterNight(false, bedtime = true); return true }
             "preview" -> { i.removeExtra("start"); enterNight(true); return true }
         }
         if (i.getBooleanExtra("wake", false)) {
@@ -158,6 +163,10 @@ class AlarmFlowActivity : ComponentActivity() {
         val handled = settings.optLong("handled", 0L)
         if (ms > 0 && (ms == a.skip || ms <= handled)) { if (mode.isEmpty()) goHome(); return }   // already dealt with
         val t = System.currentTimeMillis()
+        if (ms > 0 && t < ms + 30_000) {
+            val locked = runCatching { getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked }.getOrDefault(false)
+            AlarmLog.opened(this, ms, t, locked)
+        }
         if (ms > 0 && t >= ms && t < ms + RING_LIMIT) {
             if (mode == "ring" || mode == "snooze") return
             sound.stop()
@@ -185,7 +194,8 @@ class AlarmFlowActivity : ComponentActivity() {
 
     // ---------- the flow ----------
 
-    fun enterNight(isPreview: Boolean, targetMs: Long = 0L) {
+    /** [bedtime]: you started it (Goodnight, or the charger at night), so it counts as going to bed in Your week. */
+    fun enterNight(isPreview: Boolean, targetMs: Long = 0L, bedtime: Boolean = false) {
         sound.stop(); soundChanged++
         settings = SettingsStore.read(this)
         preview = isPreview
@@ -197,13 +207,20 @@ class AlarmFlowActivity : ComponentActivity() {
             alarmAt = next; sunriseStart = alarm.sunriseFor(next)
         }
         earlyStopped = false; weatherPrefetched = false; sound.earlyPlay = false; sleepUntil = 0
-        if (!preview) { saveArmed(); AlarmScheduler.armBackup(this, alarmAt); AlarmLog.night(this, alarmAt, t) }
+        if (!preview) { saveArmed(); AlarmScheduler.armBackup(this, alarmAt); if (bedtime) AlarmLog.night(this, alarmAt, t) }
+        preflight = emptyList()
+        if (!preview) {
+            val forAlarm = alarmAt
+            Preflight.run(this, soundSettings, BuildConfig.SPOTIFY_CLIENT_ID.ifEmpty { settings.optString("spClient", "") }) { found ->
+                if (mode == "night" && alarmAt == forAlarm) preflight = found
+            }
+        }
         mode = "night"
         tick()
     }
 
     private fun enterRing() {
-        noise.stop(); sleepUntil = 0
+        noise.stop(); sleepUntil = 0; preflight = emptyList(); lastPlayed = ""
         mode = "ring"; status = ""; ringEnteredAt = System.currentTimeMillis()
         if (!preview) { AlarmScheduler.markRinging(this); PlaybackService.stopBackup(this); AlarmLog.rang(this, alarmAt, ringEnteredAt) }
         if (sound.earlyPlay && sound.using != null) sound.continueFromEarly()
@@ -222,7 +239,10 @@ class AlarmFlowActivity : ComponentActivity() {
     fun enterMorning(keepMusic: Boolean) {
         if (!(keepMusic && sound.musicOn)) { sound.stop(); soundChanged++ }
         sound.earlyPlay = false
-        if (!preview) AlarmLog.stopped(this, alarmAt, System.currentTimeMillis())
+        if (!preview) {
+            AlarmLog.stopped(this, alarmAt, System.currentTimeMillis())
+            if (ringEnteredAt >= alarmAt - 60_000) AlarmLog.sound(this, alarmAt, soundSettings.src, lastPlayed)
+        }
         disarm()
         mode = "morning"; morningSince = System.currentTimeMillis(); morningRefresh++
         brightness(1f)
@@ -296,6 +316,21 @@ class AlarmFlowActivity : ComponentActivity() {
 
     // ---------- night light and controls ----------
 
+    fun dismissPreflight() { preflight = emptyList() }
+
+    /** The extra alarms still to come after the one that just rang (heavy sleepers), for the morning screen. */
+    fun extrasToCome(): List<Long> =
+        if (preview) emptyList() else alarm.extrasStillToCome(alarmAt, java.time.ZoneId.systemDefault()).filter { it > System.currentTimeMillis() }
+
+    /** "I'm up, cancel the rest": the remaining extra alarms won't ring. */
+    fun cancelExtras() {
+        val last = extrasToCome().maxOrNull() ?: return
+        SettingsStore.update(this) { it.put("handled", last) }
+        settings = SettingsStore.read(this)
+        reschedule()
+        morningRefresh++
+    }
+
     fun showControls() { controlsUntil = System.currentTimeMillis() + 5_000 }
 
     fun chooseNightLight(level: Int) {
@@ -351,6 +386,7 @@ class AlarmFlowActivity : ComponentActivity() {
             }
             "ring" -> {
                 sound.ramp()
+                sound.using?.let { lastPlayed = it }
                 if (t - ringEnteredAt > RING_LIMIT) enterMorning(false)   // give up after 30 minutes
             }
             "snooze" -> if (t >= snoozeUntil) enterRing()

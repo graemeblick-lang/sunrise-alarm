@@ -48,6 +48,7 @@ class ScreensTest {
         rule.onNodeWithText("Wake-up sound").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText("Morning").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText("Test the backup alarm").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Rehearse the alarm").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText("Back up").performScrollTo().assertIsDisplayed()
 
         val before = System.currentTimeMillis()

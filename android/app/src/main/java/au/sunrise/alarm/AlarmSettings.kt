@@ -30,6 +30,11 @@ data class AlarmSettings(
     val holidayState: String = "",
     /** That state's public holidays, ISO date → name (fetched by [Holidays]). */
     val holidays: Map<String, String> = emptyMap(),
+    /** Extra alarms after each repeating alarm, for heavy sleepers: this many more (0..3), [extraGap] minutes apart. */
+    val extra: Int = 0,
+    val extraGap: Int = 10,
+    /** The latest alarm that has been dealt with (turned off): it and anything before it won't ring. */
+    val handled: Long = 0,
 ) {
     /** The time used on a given day (0 = Sunday). */
     fun timeFor(day: Int): String =
@@ -92,20 +97,44 @@ data class AlarmSettings(
     /** A one-off alarm at [alarmMs], set at [nowMs] (so a quick alarm's sunrise starts straight away). */
     fun withOnce(alarmMs: Long, nowMs: Long): AlarmSettings = copy(once = alarmMs, onceStart = nowMs, skip = if (skip == alarmMs) 0 else skip)
 
+    /** The extra alarms after the repeating alarm at [alarmMs]. */
+    fun extrasAfter(alarmMs: Long): List<Long> = (1..extra.coerceIn(0, 3)).map { alarmMs + it * extraGap * 60_000L }
+
+    /**
+     * If [ms] is a repeating alarm or one of its extras: the extras still to come after it. Otherwise empty.
+     * (Used by the morning screen's "cancel the rest".)
+     */
+    fun extrasStillToCome(ms: Long, zone: java.time.ZoneId): List<Long> {
+        if (extra <= 0) return emptyList()
+        for (k in 0..extra) {
+            val main = ms - k * extraGap * 60_000L
+            val isMain = nextAlarm(java.time.Instant.ofEpochMilli(main - 1_000).atZone(zone))?.toInstant()?.toEpochMilli() == main
+            if (isMain) return extrasAfter(main).filter { it > ms }
+        }
+        return emptyList()
+    }
+
     /**
      * The next [count] alarms as (sunrise start, alarm) epoch ms, like the page's alarmPlan(): what Android keeps
-     * scheduled by itself. The one-off alarm is included in time order.
+     * scheduled by itself. The one-off alarm is included in time order, and each repeating alarm's extras follow it
+     * (no sunrise: they just ring). Alarms already dealt with ([handled]) are left out.
      */
     fun plan(from: ZonedDateTime, count: Int = 8): List<Pair<Long, Long>> {
-        val alarms = ArrayList<Long>()
-        onceAt(from)?.let { alarms += it.toInstant().toEpochMilli() }
+        val nowMs = from.toInstant().toEpochMilli()
+        val mains = ArrayList<Long>()
+        onceAt(from)?.let { mains += it.toInstant().toEpochMilli() }
         var t = from
-        while (alarms.size < count + 1) {
+        while (mains.size < count + 1) {
             val a = nextAlarm(t) ?: break
-            alarms += a.toInstant().toEpochMilli()
+            mains += a.toInstant().toEpochMilli()
             t = a.plusSeconds(1)
         }
-        return alarms.distinct().sorted().take(count).map { sunriseFor(it) to it }
+        val chosen = mains.filter { it > handled }.distinct().sorted().take(count)
+        // Each repeating alarm's extras, including those of one that has already rung (and been turned off)
+        val recent = nextAlarm(from.minusMinutes((extra.coerceIn(0, 3) * extraGap).toLong() + 1))?.toInstant()?.toEpochMilli()
+        val repeating = (chosen.filter { it != once } + listOfNotNull(recent)).distinct()
+        val extras = repeating.flatMap { extrasAfter(it) }.filter { it > nowMs && it > handled }
+        return (chosen.map { sunriseFor(it) to it } + extras.map { it to it }).distinctBy { it.second }.sortedBy { it.second }
     }
 
     /** The plan as the JSON the alarm scheduler takes: [[sunriseMs, alarmMs], ...]. */
@@ -124,6 +153,8 @@ data class AlarmSettings(
         j.put("once", once)
         j.put("onceStart", onceStart)
         j.put("holidayState", holidayState)
+        j.put("extra", extra)
+        j.put("extraGap", extraGap)
         j.remove("auto")   // alarms are always automatic now
     }
 
@@ -132,6 +163,7 @@ data class AlarmSettings(
         val SNOOZE_LENGTHS = listOf(5, 9, 15)
         /** The quick one-off alarms on the home screen, in minutes from now. */
         val QUICK = listOf(5, 10, 20, 30)
+        val EXTRA_GAPS = listOf(5, 10, 15)
 
         fun from(j: JSONObject): AlarmSettings {
             val d = AlarmSettings()
@@ -152,6 +184,9 @@ data class AlarmSettings(
                 once = j.optLong("once", 0),
                 onceStart = j.optLong("onceStart", 0),
                 holidayState = j.optString("holidayState", "").takeIf { it in Holidays.STATES } ?: "",
+                extra = j.optInt("extra", 0).coerceIn(0, 3),
+                extraGap = j.optInt("extraGap", 10).takeIf { it in EXTRA_GAPS } ?: 10,
+                handled = j.optLong("handled", 0),
                 holidays = j.optJSONObject("holidayDates")?.let { o -> o.keys().asSequence().associateWith { o.optString(it) } } ?: emptyMap(),
             )
         }

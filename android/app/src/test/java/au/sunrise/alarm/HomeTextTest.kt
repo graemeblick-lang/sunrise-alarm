@@ -34,6 +34,7 @@ class HomeTextTest {
         assertEquals("Alarm Mon at 6:30 am · in 57h 30m", HomeText.next(AlarmSettings(), at(2026, 11, 27, 21), false))
         assertEquals("Paused until Thu 26 Nov · Alarm Fri at 6:30 am · in 95h 30m",
             HomeText.next(AlarmSettings(pauseUntil = "2026-11-26"), at(2026, 11, 23, 7), false))
+        assertEquals("Alarm tomorrow at 6:30 am · in 23h 30m · +2 every 10 min", HomeText.next(AlarmSettings(extra = 2), at(2026, 11, 23, 7), false))
         assertEquals("Repeat is off: choose days below", HomeText.next(AlarmSettings(days = emptySet()), at(2026, 11, 23, 7), false))
         val now = at(2026, 11, 23, 19, 0); val nowMs = now.toInstant().toEpochMilli()
         assertEquals("One-off alarm today at 7:05 pm · in 5 min", HomeText.once(AlarmSettings().withOnce(nowMs + 5 * 60_000, nowMs), now, false))

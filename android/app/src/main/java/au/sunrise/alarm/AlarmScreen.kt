@@ -155,6 +155,16 @@ fun AlarmScreen(initial: AlarmSettings, is24Hour: Boolean, onChange: (AlarmSetti
                 if (paused != null) AssistChip(onClick = { update(s.copy(pauseUntil = "")) }, label = { Text("Clear") })
             }
 
+            SectionTitle("Extra alarms")
+            Choice(listOf(0, 1, 2, 3), s.extra, { if (it == 0) "Off" else "+$it" }) { update(s.copy(extra = it)) }
+            if (s.extra > 0) {
+                Text("Every", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                Choice(AlarmSettings.EXTRA_GAPS, s.extraGap, { "$it min" }) { update(s.copy(extraGap = it)) }
+            }
+            Hint(if (s.extra == 0) "For heavy sleepers: ring again after you've turned the alarm off, in case you fall back asleep."
+                 else "After each alarm it rings ${s.extra} more time${if (s.extra > 1) "s" else ""}, ${s.extraGap} min apart, even if you turned it off. " +
+                      "On the morning screen, tap \"I'm up: cancel the extra alarms\" once you're properly up.")
+
             SectionTitle("Public holidays")
             val context = LocalContext.current
             Row(
