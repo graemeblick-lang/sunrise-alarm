@@ -336,6 +336,17 @@ private fun MorningView(a: AlarmFlowActivity, theme: FullTheme) {
             val woke = remember(a.morningRefresh) {
                 AlarmLog.entries(context).lastOrNull()?.takeIf { a.now - it.alarm in 0..12 * 3_600_000L }?.let { AlarmLog.line(it, a.is24Hour) } ?: ""
             }
+            val extras = remember(a.morningRefresh, a.mode) { a.extrasToCome() }
+            if (extras.isNotEmpty()) {
+                Button(
+                    onClick = { a.cancelExtras() }, shape = RoundedCornerShape(18.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = rgb(theme.v("mBtn")), contentColor = rgb(theme.v("rBtnText"))),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp),
+                ) {
+                    Text("I'm up: cancel the extra alarm" + (if (extras.size > 1) "s" else "") + " at " +
+                        extras.joinToString(", ") { timeWithAmPm(it, a.is24Hour) }, fontSize = 16.sp, textAlign = TextAlign.Center)
+                }
+            }
             val rehearsal = remember(a.morningRefresh) {
                 AlarmLog.entries(context).lastOrNull()?.takeIf { it.rehearsal && a.now - it.alarm in 0..3_600_000L }
             }

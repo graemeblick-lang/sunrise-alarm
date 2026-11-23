@@ -146,7 +146,7 @@ class AlarmFlowActivity : ComponentActivity() {
     private fun handle(i: Intent?): Boolean {
         if (i == null) return false
         when (i.getStringExtra("start")) {
-            "goodnight" -> { i.removeExtra("start"); enterNight(false); return true }
+            "goodnight" -> { i.removeExtra("start"); enterNight(false, bedtime = true); return true }
             "preview" -> { i.removeExtra("start"); enterNight(true); return true }
         }
         if (i.getBooleanExtra("wake", false)) {
@@ -194,7 +194,8 @@ class AlarmFlowActivity : ComponentActivity() {
 
     // ---------- the flow ----------
 
-    fun enterNight(isPreview: Boolean, targetMs: Long = 0L) {
+    /** [bedtime]: you started it (Goodnight, or the charger at night), so it counts as going to bed in Your week. */
+    fun enterNight(isPreview: Boolean, targetMs: Long = 0L, bedtime: Boolean = false) {
         sound.stop(); soundChanged++
         settings = SettingsStore.read(this)
         preview = isPreview
@@ -206,7 +207,7 @@ class AlarmFlowActivity : ComponentActivity() {
             alarmAt = next; sunriseStart = alarm.sunriseFor(next)
         }
         earlyStopped = false; weatherPrefetched = false; sound.earlyPlay = false; sleepUntil = 0
-        if (!preview) { saveArmed(); AlarmScheduler.armBackup(this, alarmAt); AlarmLog.night(this, alarmAt, t) }
+        if (!preview) { saveArmed(); AlarmScheduler.armBackup(this, alarmAt); if (bedtime) AlarmLog.night(this, alarmAt, t) }
         preflight = emptyList()
         if (!preview) {
             val forAlarm = alarmAt
@@ -316,6 +317,19 @@ class AlarmFlowActivity : ComponentActivity() {
     // ---------- night light and controls ----------
 
     fun dismissPreflight() { preflight = emptyList() }
+
+    /** The extra alarms still to come after the one that just rang (heavy sleepers), for the morning screen. */
+    fun extrasToCome(): List<Long> =
+        if (preview) emptyList() else alarm.extrasStillToCome(alarmAt, java.time.ZoneId.systemDefault()).filter { it > System.currentTimeMillis() }
+
+    /** "I'm up, cancel the rest": the remaining extra alarms won't ring. */
+    fun cancelExtras() {
+        val last = extrasToCome().maxOrNull() ?: return
+        SettingsStore.update(this) { it.put("handled", last) }
+        settings = SettingsStore.read(this)
+        reschedule()
+        morningRefresh++
+    }
 
     fun showControls() { controlsUntil = System.currentTimeMillis() + 5_000 }
 

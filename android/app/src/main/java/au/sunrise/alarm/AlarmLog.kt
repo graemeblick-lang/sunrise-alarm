@@ -83,10 +83,13 @@ object AlarmLog {
         return parts.joinToString(" · ").replaceFirstChar { it.uppercase() }
     }
 
+    /** The Goodnight time for [e], if it's a real bedtime (older versions logged the sunrise opening by itself). */
+    private fun bedtime(e: LogEntry): Long = e.night.takeIf { it > 0 && e.alarm - it > 60 * 60_000L } ?: 0L
+
     /** The last 7 days, newest first: one line per alarm ("Mon · rang 6:30 am · up 6:41 am · Goodnight 10:42 pm"). */
     fun weekRows(list: List<LogEntry>, nowMs: Long, is24Hour: Boolean, zone: ZoneId = ZoneId.systemDefault()): List<String> {
         fun t(ms: Long) = HomeText.time(AlarmSettings.formatTime(Instant.ofEpochMilli(ms).atZone(zone).toLocalTime()), is24Hour)
-        return list.filter { !it.rehearsal && nowMs - it.alarm in 0..7 * 86_400_000L && (it.rang > 0 || it.backup > 0 || it.night > 0) }
+        return list.filter { !it.rehearsal && nowMs - it.alarm in 0..7 * 86_400_000L && (it.rang > 0 || it.backup > 0 || bedtime(it) > 0) }
             .sortedByDescending { it.alarm }
             .map { e ->
                 val day = Instant.ofEpochMilli(e.alarm).atZone(zone).dayOfWeek.getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.ENGLISH)
@@ -95,7 +98,7 @@ object AlarmLog {
                 if (e.backup > 0) parts += "backup alarm"
                 if (e.snoozes > 0) parts += if (e.snoozes == 1) "snoozed once" else "snoozed ${e.snoozes}×"
                 if (e.stopped > 0) parts += "up ${t(e.stopped)}"
-                if (e.night > 0) parts += "Goodnight ${t(e.night)}"
+                if (bedtime(e) > 0) parts += "Goodnight ${t(bedtime(e))}"
                 parts.joinToString(" · ")
             }
     }
@@ -109,8 +112,8 @@ object AlarmLog {
             parts += "Up ${Math.round(up.map { (it.stopped - it.alarm) / 60_000.0 }.average().coerceAtLeast(0.0))} min after the alarm on average"
             parts += "%.1f snoozes".format(java.util.Locale.ENGLISH, up.map { it.snoozes }.average())
         }
-        val nights = week.filter { it.night > 0 }.map {
-            val lt = Instant.ofEpochMilli(it.night).atZone(zone).toLocalTime()
+        val nights = week.filter { bedtime(it) > 0 }.map {
+            val lt = Instant.ofEpochMilli(bedtime(it)).atZone(zone).toLocalTime()
             ((lt.hour * 60 + lt.minute) - 720 + 1440) % 1440            // minutes after midday, so midnight doesn't split them
         }
         if (nights.size >= 2) {

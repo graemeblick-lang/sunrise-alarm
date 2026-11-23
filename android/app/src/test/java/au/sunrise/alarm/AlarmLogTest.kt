@@ -44,6 +44,10 @@ class AlarmLogTest {
         assertEquals("Up 10 min after the alarm on average · 0.5 snoozes · Goodnight around 11:17 pm, give or take 36 min",
             AlarmLog.weekSummary(log, now, false, mel))
         assertEquals("", AlarmLog.weekSummary(emptyList(), now, false, mel))
+        // A "Goodnight" less than an hour before the alarm was the sunrise opening by itself: not a bedtime
+        val noGoodnight = listOf(LogEntry(ms(6, 30, 22), rang = ms(6, 30, 22), stopped = ms(6, 35, 22), night = ms(6, 0, 22)))
+        assertEquals(listOf("Sun · rang 6:30 am · up 6:35 am"), AlarmLog.weekRows(noGoodnight, now, false, mel))
+        assertEquals(false, AlarmLog.weekSummary(noGoodnight, now, false, mel).contains("Goodnight"))
     }
 
     @Test fun rehearsalReport() {

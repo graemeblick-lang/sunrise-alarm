@@ -50,6 +50,36 @@ class AlarmSettingsTest {
         assertEquals(0, s.plan(at(2026, 11, 23, 20, 0)).size)            // once it's passed, nothing is left
     }
 
+    @Test fun extraAlarmsFollowEachRepeatingAlarm() {
+        val now = at(2026, 11, 23, 20, 0)
+        val s = base.copy(extra = 2, extraGap = 10)
+        val p = s.plan(now, 2)
+        assertEquals(listOf("2026-11-24 06:30", "2026-11-24 06:40", "2026-11-24 06:50", "2026-11-25 06:30", "2026-11-25 06:40", "2026-11-25 06:50"),
+            p.map { fmt(java.time.Instant.ofEpochMilli(it.second).atZone(mel)) })
+        assertEquals(ms(at(2026, 11, 24, 6, 40)), p[1].first)                           // extras have no sunrise: they just ring
+        assertEquals(ms(at(2026, 11, 24, 6, 0)), p[0].first)
+    }
+
+    @Test fun extrasOfAnAlarmThatRangAreStillToCome() {
+        val s = base.copy(extra = 2, extraGap = 10, handled = ms(at(2026, 11, 24, 6, 30)))   // turned off at 6:32
+        val p = s.plan(at(2026, 11, 24, 6, 32), 1)
+        assertEquals(listOf("2026-11-24 06:40", "2026-11-24 06:50", "2026-11-25 06:30", "2026-11-25 06:40", "2026-11-25 06:50"), p.map { fmt(java.time.Instant.ofEpochMilli(it.second).atZone(mel)) })
+        // "Cancel the rest": handled moves to the last extra
+        val cancelled = s.copy(handled = ms(at(2026, 11, 24, 6, 50)))
+        assertEquals(listOf("2026-11-25 06:30", "2026-11-25 06:40", "2026-11-25 06:50"), cancelled.plan(at(2026, 11, 24, 6, 32), 1).map { fmt(java.time.Instant.ofEpochMilli(it.second).atZone(mel)) })
+        assertEquals(listOf(ms(at(2026, 11, 24, 6, 40)), ms(at(2026, 11, 24, 6, 50))), s.extrasStillToCome(ms(at(2026, 11, 24, 6, 30)), mel))
+        assertEquals(listOf(ms(at(2026, 11, 24, 6, 50))), s.extrasStillToCome(ms(at(2026, 11, 24, 6, 40)), mel))
+        assertEquals(emptyList<Long>(), s.extrasStillToCome(ms(at(2026, 11, 24, 7, 5)), mel))
+    }
+
+    @Test fun noExtrasForASkippedAlarmOrAOneOff() {
+        val now = at(2026, 11, 23, 20, 0)
+        val skipped = base.copy(extra = 1, skip = ms(at(2026, 11, 24, 6, 30)))
+        assertEquals("2026-11-25 06:30", fmt(java.time.Instant.ofEpochMilli(skipped.plan(now, 1)[0].second).atZone(mel)))
+        val once = base.copy(days = emptySet(), extra = 2).withOnce(ms(now) + 5 * 60_000, ms(now))
+        assertEquals(1, once.plan(now).size)
+    }
+
     @Test fun skippingTheOneOffDropsIt() {
         val now = at(2026, 11, 23, 19, 0)
         val s = base.withOnce(ms(now) + 10 * 60_000, ms(now))

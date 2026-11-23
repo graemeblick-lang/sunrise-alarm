@@ -5,6 +5,7 @@ A sunrise wake-up light and alarm for an old phone on a bedside stand.
 - Sunrise glow on the screen before the alarm
 - Wake to Spotify, internet radio, another music app or gentle chimes
 - Quick one-off alarms (in 5, 10, 20 or 30 minutes, or at a time you pick)
+- Extra alarms for heavy sleepers: it rings again up to 3 times, 5–15 minutes apart, until you say you're up
 - Skips your state's public holidays, if you like
 - The night clock can start by itself when the phone goes on the charger; sleep timer for music; bedtime reminder
 - Home-screen widget and Quick Settings tile

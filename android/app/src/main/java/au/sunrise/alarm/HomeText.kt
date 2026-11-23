@@ -38,7 +38,8 @@ object HomeText {
         val a = s.nextAlarm(now) ?: return prefix.removeSuffix(" · ")
         val ms = a.toInstant().toEpochMilli()
         val holiday = s.skippedHoliday(now)?.let { (d, name) -> " · not ${DAY_SHORT[d.dayOfWeek.value % 7]} ($name)" } ?: ""
-        return prefix + "Alarm ${dayWord(a, now)} at ${time(AlarmSettings.formatTime(a.toLocalTime()), is24Hour)} · ${until(ms, now)}" + holiday
+        val extras = if (s.extra > 0) " · +${s.extra} every ${s.extraGap} min" else ""
+        return prefix + "Alarm ${dayWord(a, now)} at ${time(AlarmSettings.formatTime(a.toLocalTime()), is24Hour)} · ${until(ms, now)}" + extras + holiday
     }
 
     /** The one-off alarm: "One-off alarm today at 7:12 pm · in 5 min", or "" if there isn't one. */
