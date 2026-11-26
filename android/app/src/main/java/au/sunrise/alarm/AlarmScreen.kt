@@ -252,6 +252,41 @@ fun PerDayScreen(initial: AlarmSettings, is24Hour: Boolean, onChange: (AlarmSett
     }
 }
 
+@Composable
+private fun NextAlarmCard(s: AlarmSettings, is24Hour: Boolean) {
+    val next = s.nextAlarm(ZonedDateTime.now())
+    val text = when {
+        next == null -> "No repeating alarm"
+        else -> {
+            val now = LocalDate.now()
+            val day = when (next.toLocalDate()) {
+                now -> "Today"
+                now.plusDays(1) -> "Tomorrow"
+                else -> next.format(DateTimeFormatter.ofPattern("EEEE d MMMM"))
+            }
+            "$day at ${showTime(AlarmSettings.formatTime(next.toLocalTime()), is24Hour)}"
+        }
+    }
+    Surface(
+        color = MaterialTheme.colorScheme.primaryContainer,
+        shape = MaterialTheme.shapes.extraLarge,
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
+    ) {
+        Column(Modifier.padding(20.dp)) {
+            Text("Next alarm", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+            Spacer(Modifier.height(4.dp))
+            Text(text, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+            if (next != null) {
+                Text(
+                    "Sunrise starts ${s.dur} min before",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun TimeDialog(title: String, initial: LocalTime, is24Hour: Boolean, onDismiss: () -> Unit, onConfirm: (LocalTime) -> Unit) {
