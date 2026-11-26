@@ -33,6 +33,9 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -44,92 +47,106 @@ import androidx.compose.ui.unit.dp
 
 private val SUN_COLOUR_NAMES = listOf("Dawn", "Glow", "Daylight")
 
-/** 🌙 Night: starting the night screen, the sleep timer, the bedtime reminder, the colour theme and the clock. */
+/** Settings → Night: what happens at bedtime (starting by itself, the reminder, falling asleep). */
 @Composable
-fun NightScreen(
-    initial: LookSettings, initialNight: NightSettings,
-    onChange: (LookSettings) -> Unit, onNightChange: (NightSettings) -> Unit, onBack: () -> Unit,
-) {
-    var s by remember { mutableStateOf(initial) }
-    fun update(n: LookSettings) { s = n; onChange(n) }
+fun NightScreen(initialNight: NightSettings, onNightChange: (NightSettings) -> Unit, onBack: () -> Unit) {
     var n by remember { mutableStateOf(initialNight) }
     fun updateNight(v: NightSettings) { n = v; onNightChange(v) }
 
     SettingsScaffold("Night", onBack) {
-        SectionTitle("Start the night clock by itself")
-        Choice(NightSettings.AUTO_NIGHT_HOURS, n.autoNight, { if (it == 0) "Off" else "${it - 12} pm" }) { updateNight(n.copy(autoNight = it)) }
-        Hint(if (n.autoNight == 0) "Tap Goodnight on the home screen to start it."
-             else "When the phone is on the charger after ${n.autoNight - 12} pm, the night clock starts by itself (once a night).")
-
-        SectionTitle("Sleep sound")
-        Choice(NoisePlayer.KINDS.indices.toList(), NoisePlayer.KINDS.indexOf(n.sleepSound).coerceAtLeast(0),
-            { NoisePlayer.NAMES.getValue(NoisePlayer.KINDS[it]) }) { updateNight(n.copy(sleepSound = NoisePlayer.KINDS[it])) }
-        Hint("Made by the app, so it works with no internet. Tap the screen at night, then the sound's button. It fades away as the sunrise starts.")
-
-        SectionTitle("Sleep timer")
-        Choice(NightSettings.SLEEP_TIMERS, n.sleepTimer, { if (it == 0) "Off" else "$it min" }) { updateNight(n.copy(sleepTimer = it)) }
-        Hint("Music or sleep sounds you play from the night screen fade out after this long. Tap the timer on the night screen to change it for tonight.")
-
-        SectionTitle("Bedtime reminder")
-        Choice(NightSettings.BEDTIME_HOURS, n.bedtime, { if (it == 0) "Off" else "$it h" }) { updateNight(n.copy(bedtime = it)) }
-        Hint(if (n.bedtime == 0) "No reminder." else "A notification ${n.bedtime} hours before your alarm, with a Goodnight button.")
-
-        SectionTitle("Colour theme")
-        Column(Modifier.selectableGroup()) {
-            val themes = buildList<Triple<String, String, String?>> {
-                if (Build.VERSION.SDK_INT >= 31) add(Triple(Themes.PHONE, "Phone colours", "Matches your wallpaper"))
-                Themes.ALL.forEach { add(Triple(it.key, it.name, null)) }
-            }
-            themes.forEach { (key, name, sub) ->
-                val selected = s.theme == key || (key == "sunrise" && Themes.ALL.none { it.key == s.theme } && s.theme != Themes.PHONE)
-                ListItem(
-                    headlineContent = { Text(name) },
-                    supportingContent = sub?.let { { Text(it) } },
-                    leadingContent = { ThemeSwatch(key) },
-                    trailingContent = { RadioButton(selected = selected, onClick = null) },
-                    modifier = Modifier.selectable(selected = selected, role = Role.RadioButton, onClick = { update(s.copy(theme = key)) }),
-                )
-            }
+        SwitchRow("Start on the charger", "The night clock starts by itself when the phone is plugged in after the time below (once a night)",
+            n.autoNight > 0) { on -> updateNight(n.copy(autoNight = if (on) 21 else 0)) }
+        if (n.autoNight > 0) {
+            Choice(NightSettings.AUTO_NIGHT_HOURS.filter { it > 0 }, n.autoNight, { "${it - 12} pm" }) { updateNight(n.copy(autoNight = it)) }
+        }
+        SwitchRow("Bedtime reminder", if (n.bedtime > 0) "A notification ${n.bedtime} hours before your alarm, with a Goodnight button" else "A notification before your alarm",
+            n.bedtime > 0) { on -> updateNight(n.copy(bedtime = if (on) 8 else 0)) }
+        if (n.bedtime > 0) {
+            Choice(NightSettings.BEDTIME_HOURS.filter { it > 0 }, n.bedtime, { "$it h before" }) { updateNight(n.copy(bedtime = it)) }
         }
 
-        SectionTitle("Overnight clock brightness")
-        LabelledSlider(
-            value = s.dim.toFloat(), range = 1f..6f, steps = 4,
-            valueText = "${s.dim} of 6", description = "Overnight clock brightness",
-        ) { update(s.copy(dim = it.toInt())) }
-
-        Hint("The clock stays this dim until the sunrise starts.")
-
-        SectionTitle("Clock")
-        Choice(listOf(0, 1, 2), s.clockSize, { listOf("Normal", "Large", "Huge")[it] }) { update(s.copy(clockSize = it)) }
-        SwitchRow("Bolder numbers", "Easier to read without glasses", s.clockBold) { update(s.copy(clockBold = it)) }
-        SwitchRow("Show the date", null, s.nightDate) { update(s.copy(nightDate = it)) }
+        SectionTitle("Falling asleep")
+        ControlLabel("Sleep sound", "Made by the app, no internet needed. Tap the night screen to play it.")
+        Choice(NoisePlayer.KINDS.indices.toList(), NoisePlayer.KINDS.indexOf(n.sleepSound).coerceAtLeast(0),
+            { NoisePlayer.NAMES.getValue(NoisePlayer.KINDS[it]) }) { updateNight(n.copy(sleepSound = NoisePlayer.KINDS[it])) }
+        ControlLabel("Sleep timer", "Music and sleep sounds fade out after this long")
+        Choice(NightSettings.SLEEP_TIMERS, n.sleepTimer, { if (it == 0) "Off" else "$it min" }) { updateNight(n.copy(sleepTimer = it)) }
+        Spacer(Modifier.height(16.dp))
     }
 }
 
-/** 🌅 Sunrise: how long it takes, its colours and how bright it gets. */
+/** Settings → Look: the colour theme, the night clock and the sunrise's brightness and colours. */
 @Composable
-fun SunriseScreen(
-    initial: LookSettings, dur: Int,
-    onChange: (LookSettings) -> Unit, onDur: (Int) -> Unit, onPreview: () -> Unit, onBack: () -> Unit,
-) {
+fun LookScreen(initial: LookSettings, onChange: (LookSettings) -> Unit, onOpen: (String) -> Unit, onPreview: () -> Unit, onBack: () -> Unit) {
     var s by remember { mutableStateOf(initial) }
     fun update(n: LookSettings) { s = n; onChange(n) }
-    var length by remember { mutableStateOf(dur) }
-    var editingColour by remember { mutableStateOf<Int?>(null) }
+    var pickingTheme by remember { mutableStateOf(false) }
 
-    SettingsScaffold("Sunrise", onBack) {
-        SectionTitle("Starts before the alarm")
-        Choice(AlarmSettings.SUNRISE_LENGTHS, length, { "$it min" }) { length = it; onDur(it) }
+    SettingsScaffold("Look", onBack) {
+        ValueRow("Colour theme", themeName(s.theme)) { pickingTheme = true }
 
-        SectionTitle("Brightness")
+        SectionTitle("Night clock")
+        Choice(listOf(0, 1, 2), s.clockSize, { listOf("Normal", "Large", "Huge")[it] }) { update(s.copy(clockSize = it)) }
+        SwitchRow("Bolder numbers", "Easier to read without glasses", s.clockBold) { update(s.copy(clockBold = it)) }
+        SwitchRow("Show the date", null, s.nightDate) { update(s.copy(nightDate = it)) }
+        LabelledSlider(
+            value = s.dim.toFloat(), range = 1f..6f, steps = 4,
+            valueText = "Brightness overnight: ${s.dim} of 6", description = "Overnight clock brightness",
+        ) { update(s.copy(dim = it.toInt())) }
+
+        SectionTitle("Sunrise")
         LabelledSlider(
             value = s.sunMax.toFloat(), range = 15f..100f, steps = 0,
-            valueText = "${s.sunMax}%", description = "Sunrise brightness",
+            valueText = "How bright it gets: ${s.sunMax}%", description = "Sunrise brightness",
         ) { update(s.copy(sunMax = it.toInt())) }
-        Hint("How bright the screen gets by alarm time. It stays dim for most of the sunrise and brightens towards the end.")
+        Hint("It stays dim for most of the sunrise and brightens towards the end.")
+        ValueRow("Colours", if (s.sunCustom) "Your own" else "The theme's sunrise") { onOpen("colours") }
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            FilledTonalButton(onClick = onPreview) { Text("▶ Preview the sunrise") }
+        }
+    }
 
-        SectionTitle("Colours")
+    if (pickingTheme) {
+        AlertDialog(
+            onDismissRequest = { pickingTheme = false },
+            title = { Text("Colour theme") },
+            text = {
+                Column(Modifier.selectableGroup().verticalScroll(rememberScrollState())) {
+                    val themes = buildList<Pair<String, String>> {
+                        if (Build.VERSION.SDK_INT >= 31) add(Themes.PHONE to "Phone colours (your wallpaper)")
+                        Themes.ALL.forEach { add(it.key to it.name) }
+                    }
+                    themes.forEach { (key, name) ->
+                        val selected = s.theme == key || (key == "sunrise" && Themes.ALL.none { it.key == s.theme } && s.theme != Themes.PHONE)
+                        Row(
+                            Modifier.fillMaxWidth().selectable(selected = selected, role = Role.RadioButton) {
+                                update(s.copy(theme = key)); pickingTheme = false
+                            }.padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            ThemeSwatch(key)
+                            Spacer(Modifier.width(14.dp))
+                            Text(name, modifier = Modifier.weight(1f))
+                            RadioButton(selected = selected, onClick = null)
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { pickingTheme = false }) { Text("Close") } },
+        )
+    }
+}
+
+internal fun themeName(key: String) = if (key == Themes.PHONE) "Phone colours" else Themes.byKey(key).name
+
+/** Settings → Look → Colours: the sunrise's own colours (or the theme's). */
+@Composable
+fun ColoursScreen(initial: LookSettings, onChange: (LookSettings) -> Unit, onPreview: () -> Unit, onBack: () -> Unit) {
+    var s by remember { mutableStateOf(initial) }
+    fun update(n: LookSettings) { s = n; onChange(n) }
+    var editingColour by remember { mutableStateOf<Int?>(null) }
+
+    SettingsScaffold("Sunrise colours", onBack) {
         SwitchRow(
             title = "Choose my own",
             subtitle = if (s.sunCustom) null else "Using the colour theme's sunrise",
@@ -155,6 +172,7 @@ fun SunriseScreen(
                     modifier = Modifier.clickableRow("change the $name colour") { editingColour = i },
                 )
             }
+            SectionTitle("Ready-made")
             Row(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -169,7 +187,7 @@ fun SunriseScreen(
             }
         }
         Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            FilledTonalButton(onClick = onPreview) { Text("Preview the sunrise (1 minute)") }
+            FilledTonalButton(onClick = onPreview) { Text("▶ Preview the sunrise") }
         }
     }
 

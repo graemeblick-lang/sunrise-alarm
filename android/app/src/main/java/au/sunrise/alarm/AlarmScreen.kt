@@ -54,6 +54,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.material3.RadioButton
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -79,126 +84,91 @@ internal val DAY_NAMES = listOf("Sunday", "Monday", "Tuesday", "Wednesday", "Thu
 /** Monday first, the way most people read a week (the page numbers Sunday as 0). */
 internal val WEEK_ORDER = listOf(1, 2, 3, 4, 5, 6, 0)
 
+/**
+ * The Alarm screen: everything about when and how the alarm rings, in the order you think about it.
+ *  - When: time, days, public holidays, pause, different time each day.
+ *  - Waking up: sound (its own screen), sunrise length, snooze, extra alarms.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AlarmScreen(initial: AlarmSettings, is24Hour: Boolean, onChange: (AlarmSettings) -> Unit, onBack: () -> Unit) {
+fun AlarmScreen(
+    initial: AlarmSettings, soundSummary: String, is24Hour: Boolean,
+    onChange: (AlarmSettings) -> Unit, onOpen: (String) -> Unit, onBack: () -> Unit,
+) {
     var s by remember { mutableStateOf(initial) }
     fun update(n: AlarmSettings) { s = n; onChange(n) }
-
-    // Which time is being edited: -1 = the main alarm time, 0..6 = that day's own time, null = none
-    var editingTime by remember { mutableStateOf<Int?>(null) }
+    val snack = rememberSnack()
+    val context = LocalContext.current
+    var editingTime by remember { mutableStateOf(false) }
     var pickingPause by remember { mutableStateOf(false) }
+    var pickingHolidays by remember { mutableStateOf(false) }
 
-    SettingsScaffold("Schedule", onBack) {
-            NextAlarmCard(s, is24Hour)
+    SettingsScaffold("Alarm", onBack) {
+        NextAlarmCard(s, is24Hour)
 
-            ListItem(
-                headlineContent = { Text("Alarm time") },
-                supportingContent = { Text(if (s.perDay) "Used for days without their own time" else "Every alarm day") },
-                trailingContent = { Text(showTime(s.time, is24Hour), style = MaterialTheme.typography.titleLarge) },
-                modifier = Modifier.clickableRow("change the alarm time") { editingTime = -1 },
-            )
-
-            SectionTitle("Repeat")
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                WEEK_ORDER.forEach { day ->
-                    val on = day in s.days
-                    FilterChip(
-                        selected = on,
-                        onClick = { update(s.copy(days = if (on) s.days - day else s.days + day)) },
-                        label = { Text(DAY_LETTERS[day]) },
-                        modifier = Modifier.weight(1f).semantics { contentDescription = DAY_NAMES[day] },
-                    )
-                }
+        // ----- when -----
+        SectionTitle("When")
+        ListItem(
+            headlineContent = { Text("Time") },
+            supportingContent = { Text(if (s.perDay) "Days without their own time" else repeatSummary(s.days)) },
+            trailingContent = { Text(showTime(s.time, is24Hour), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary) },
+            modifier = Modifier.clickableRow("change the alarm time") { editingTime = true },
+        )
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            WEEK_ORDER.forEach { day ->
+                val on = day in s.days
+                FilterChip(
+                    selected = on,
+                    onClick = { update(s.copy(days = if (on) s.days - day else s.days + day)) },
+                    label = { Text(DAY_LETTERS[day]) },
+                    modifier = Modifier.weight(1f).semantics { contentDescription = DAY_NAMES[day] },
+                )
             }
-            Text(
-                repeatSummary(s.days),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-            )
+        }
+        val coming = Holidays.upcoming(s, LocalDate.now(), 1).firstOrNull()
+        ValueRow("Public holidays", when {
+            s.holidayState.isEmpty() -> "Rings on public holidays"
+            coming != null -> "No alarm on ${s.holidayState} holidays · next: ${coming.first.format(DateTimeFormatter.ofPattern("EEE d MMM"))}, ${coming.second}"
+            else -> "No alarm on ${s.holidayState} holidays (getting the dates…)"
+        }) { pickingHolidays = true }
+        val paused = pauseDate(s.pauseUntil)?.takeIf { !it.isBefore(LocalDate.now()) }
+        ValueRow("Pause for a holiday", if (paused != null) "Paused until ${showDate(paused)}" else "Not paused") { pickingPause = true }
+        if (paused != null) Row(Modifier.padding(horizontal = 8.dp)) {
+            TextButton(onClick = {
+                val was = s.pauseUntil
+                update(s.copy(pauseUntil = "")); snack("Alarms are back on", "Undo") { update(s.copy(pauseUntil = was)) }
+            }) { Text("Resume now") }
+        }
+        ValueRow("Different time each day", if (s.perDay) WEEK_ORDER.filter { it in s.days }.joinToString(", ") {
+            DAY_NAMES[it].take(3) + " " + showTime(s.timeFor(it), is24Hour) } else "Off") { onOpen("perday") }
 
-            SwitchRow(
-                title = "Different time each day",
-                subtitle = null,
-                checked = s.perDay,
-                enabled = s.days.isNotEmpty(),
-                onCheckedChange = { on ->
-                    // Start each day at the main time, as the page does
-                    val times = if (on) s.days.associateWith { s.dayTimes[it] ?: s.time } else s.dayTimes
-                    update(s.copy(perDay = on, dayTimes = times))
-                },
-            )
-            if (s.perDay && s.days.isNotEmpty()) {
-                WEEK_ORDER.filter { it in s.days }.forEach { day ->
-                    ListItem(
-                        headlineContent = { Text(DAY_NAMES[day]) },
-                        trailingContent = { Text(showTime(s.timeFor(day), is24Hour), style = MaterialTheme.typography.titleMedium) },
-                        modifier = Modifier.clickableRow("change ${DAY_NAMES[day]} time") { editingTime = day }.padding(start = 16.dp),
-                    )
-                }
-            }
-
-            SectionTitle("Pause alarms")
-            val paused = pauseDate(s.pauseUntil)?.takeIf { !it.isBefore(LocalDate.now()) }
-            ListItem(
-                headlineContent = { Text(if (paused != null) "Paused until ${showDate(paused)}" else "Not paused") },
-                supportingContent = { Text("For holidays. Alarms start again the day after.") },
-                modifier = Modifier.clickableRow("choose the last day of the pause") { pickingPause = true },
-            )
-            Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                AssistChip(onClick = { update(s.copy(pauseUntil = LocalDate.now().plusDays(1).toString())) }, label = { Text("Tomorrow") })
-                AssistChip(onClick = { update(s.copy(pauseUntil = LocalDate.now().plusDays(7).toString())) }, label = { Text("1 week") })
-                if (paused != null) AssistChip(onClick = { update(s.copy(pauseUntil = "")) }, label = { Text("Clear") })
-            }
-
-            SectionTitle("Extra alarms")
-            Choice(listOf(0, 1, 2, 3), s.extra, { if (it == 0) "Off" else "+$it" }) { update(s.copy(extra = it)) }
-            if (s.extra > 0) {
-                Text("Every", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
-                Choice(AlarmSettings.EXTRA_GAPS, s.extraGap, { "$it min" }) { update(s.copy(extraGap = it)) }
-            }
-            Hint(if (s.extra == 0) "For heavy sleepers: ring again after you've turned the alarm off, in case you fall back asleep."
-                 else "After each alarm it rings ${s.extra} more time${if (s.extra > 1) "s" else ""}, ${s.extraGap} min apart, even if you turned it off. " +
-                      "On the morning screen, tap \"I'm up: cancel the extra alarms\" once you're properly up.")
-
-            SectionTitle("Public holidays")
-            val context = LocalContext.current
-            Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                (listOf("") + Holidays.STATES).forEach { st ->
-                    FilterChip(
-                        selected = s.holidayState == st,
-                        onClick = { update(s.copy(holidayState = st)); if (st.isNotEmpty()) Holidays.refresh(context, force = true) },
-                        label = { Text(if (st.isEmpty()) "Ring anyway" else st) },
-                    )
-                }
-            }
-            val coming = Holidays.upcoming(s, LocalDate.now())
-            Hint(when {
-                s.holidayState.isEmpty() -> "Choose your state and weekday alarms won't ring on its public holidays."
-                coming.isEmpty() -> "No alarms on ${s.holidayState} public holidays. Getting the dates (needs the internet once)…"
-                else -> "No alarms on ${s.holidayState} public holidays. Next: " +
-                    coming.joinToString(", ") { (d, n) -> d.format(DateTimeFormatter.ofPattern("EEE d MMM")) + " " + n }
-            })
+        // ----- waking up -----
+        SectionTitle("Waking up")
+        ValueRow("Sound", soundSummary, icon = "🔊") { onOpen("sound") }
+        ControlLabel("🌅  Sunrise", "Starts this long before the alarm")
+        Choice(AlarmSettings.SUNRISE_LENGTHS, s.dur, { "$it min" }) { update(s.copy(dur = it)) }
+        ControlLabel("😴  Snooze")
+        Choice(AlarmSettings.SNOOZE_LENGTHS, s.snooze, { "$it min" }) { update(s.copy(snooze = it)) }
+        ControlLabel("🔁  Extra alarms", "Rings again in case you fall back asleep")
+        Choice(listOf(0, 1, 2, 3), s.extra, { if (it == 0) "Off" else "+$it" }) { update(s.copy(extra = it)) }
+        if (s.extra > 0) {
+            ControlLabel("Every")
+            Choice(AlarmSettings.EXTRA_GAPS, s.extraGap, { "$it min" }) { update(s.copy(extraGap = it)) }
+            Hint("After each alarm it rings ${s.extra} more time${if (s.extra > 1) "s" else ""}, even if you turned it off. " +
+                "Once you're up, tap \"cancel the extra alarms\" on the morning screen.")
+        }
+        Spacer(Modifier.height(16.dp))
     }
 
-    editingTime?.let { which ->
-        val current = AlarmSettings.parseTime(if (which < 0) s.time else s.timeFor(which)) ?: LocalTime.of(6, 30)
+    if (editingTime) {
         TimeDialog(
-            title = if (which < 0) "Alarm time" else DAY_NAMES[which],
-            initial = current,
+            title = "Alarm time",
+            initial = AlarmSettings.parseTime(s.time) ?: LocalTime.of(6, 30),
             is24Hour = is24Hour,
-            onDismiss = { editingTime = null },
+            onDismiss = { editingTime = false },
             onConfirm = { t ->
-                val v = AlarmSettings.formatTime(t)
-                update(if (which < 0) s.copy(time = v) else s.copy(dayTimes = s.dayTimes + (which to v)))
-                editingTime = null
+                update(s.copy(time = AlarmSettings.formatTime(t))); editingTime = false
+                snack("Alarm set for ${showTime(AlarmSettings.formatTime(t), is24Hour)}", null) {}
             },
         )
     }
@@ -207,43 +177,78 @@ fun AlarmScreen(initial: AlarmSettings, is24Hour: Boolean, onChange: (AlarmSetti
         PauseDialog(
             initial = pauseDate(s.pauseUntil),
             onDismiss = { pickingPause = false },
-            onConfirm = { d -> update(s.copy(pauseUntil = d.toString())); pickingPause = false },
+            onConfirm = { d ->
+                update(s.copy(pauseUntil = d.toString())); pickingPause = false
+                snack("Alarms paused until ${showDate(d)}", "Undo") { update(s.copy(pauseUntil = "")) }
+            },
+        )
+    }
+
+    if (pickingHolidays) {
+        AlertDialog(
+            onDismissRequest = { pickingHolidays = false },
+            title = { Text("Public holidays") },
+            text = {
+                Column(Modifier.selectableGroup().verticalScroll(rememberScrollState())) {
+                    (listOf("") + Holidays.STATES).forEach { st ->
+                        val selected = s.holidayState == st
+                        Row(
+                            Modifier.fillMaxWidth().selectable(selected = selected, role = Role.RadioButton) {
+                                update(s.copy(holidayState = st)); pickingHolidays = false
+                                if (st.isNotEmpty()) {
+                                    Holidays.refresh(context, force = true)
+                                    snack("No alarm on $st public holidays", null) {}
+                                } else snack("Rings on public holidays", null) {}
+                            }.padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(selected = selected, onClick = null)
+                            Spacer(Modifier.width(12.dp))
+                            Text(if (st.isEmpty()) "Ring anyway" else "Skip $st holidays")
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { pickingHolidays = false }) { Text("Close") } },
         )
     }
 }
 
+/** Different time each day: a switch, then each alarm day's own time. */
 @Composable
-private fun NextAlarmCard(s: AlarmSettings, is24Hour: Boolean) {
-    val next = s.nextAlarm(ZonedDateTime.now())
-    val text = when {
-        next == null -> "No repeating alarm"
-        else -> {
-            val now = LocalDate.now()
-            val day = when (next.toLocalDate()) {
-                now -> "Today"
-                now.plusDays(1) -> "Tomorrow"
-                else -> next.format(DateTimeFormatter.ofPattern("EEEE d MMMM"))
-            }
-            "$day at ${showTime(AlarmSettings.formatTime(next.toLocalTime()), is24Hour)}"
+fun PerDayScreen(initial: AlarmSettings, is24Hour: Boolean, onChange: (AlarmSettings) -> Unit, onBack: () -> Unit) {
+    var s by remember { mutableStateOf(initial) }
+    fun update(n: AlarmSettings) { s = n; onChange(n) }
+    var editing by remember { mutableStateOf<Int?>(null) }
+    SettingsScaffold("Different time each day", onBack) {
+        SwitchRow(
+            title = "Different time each day",
+            subtitle = if (s.days.isEmpty()) "Choose the alarm days first" else null,
+            checked = s.perDay,
+            enabled = s.days.isNotEmpty(),
+            onCheckedChange = { on ->
+                // Start each day at the main time
+                val times = if (on) s.days.associateWith { s.dayTimes[it] ?: s.time } else s.dayTimes
+                update(s.copy(perDay = on, dayTimes = times))
+            },
+        )
+        if (s.perDay) WEEK_ORDER.filter { it in s.days }.forEach { day ->
+            ListItem(
+                headlineContent = { Text(DAY_NAMES[day]) },
+                trailingContent = { Text(showTime(s.timeFor(day), is24Hour), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary) },
+                modifier = Modifier.clickableRow("change ${DAY_NAMES[day]} time") { editing = day },
+            )
         }
+        Hint("Days without their own time use the main alarm time.")
     }
-    Surface(
-        color = MaterialTheme.colorScheme.primaryContainer,
-        shape = MaterialTheme.shapes.extraLarge,
-        modifier = Modifier.fillMaxWidth().padding(16.dp),
-    ) {
-        Column(Modifier.padding(20.dp)) {
-            Text("Next alarm", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
-            Spacer(Modifier.height(4.dp))
-            Text(text, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
-            if (next != null) {
-                Text(
-                    "Sunrise starts ${s.dur} min before",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-            }
-        }
+    editing?.let { day ->
+        TimeDialog(
+            title = DAY_NAMES[day],
+            initial = AlarmSettings.parseTime(s.timeFor(day)) ?: LocalTime.of(6, 30),
+            is24Hour = is24Hour,
+            onDismiss = { editing = null },
+            onConfirm = { t -> update(s.copy(dayTimes = s.dayTimes + (day to AlarmSettings.formatTime(t)))); editing = null },
+        )
     }
 }
 

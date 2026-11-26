@@ -76,6 +76,17 @@ object HomeText {
             (if (n.bedtime > 0) "reminder ${n.bedtime} h before · " else "") +
             "${themeName(s)} theme"
 
+    /** The Look row: "Sunrise theme · large clock · up to 60% bright". */
+    fun look(s: LookSettings): String =
+        "${themeName(s)} theme · ${listOf("normal", "large", "huge")[s.clockSize.coerceIn(0, 2)]} clock · up to ${s.sunMax}% bright"
+
+    /** The Alarm screen's Sound row: "Spotify · Morning mix · weekends: chimes". */
+    fun soundRow(s: SoundSettings): String = sound(s, 0).substringBefore(" · fade").let { src ->
+        src + if (s.weekendSrc.isNotEmpty() && s.weekendSrc != s.src) " · weekends: " + when (s.weekendSrc) {
+            "radio" -> "radio"; "spotify" -> "Spotify"; "apps" -> s.appName.ifEmpty { "music app" }; else -> "chimes"
+        } else ""
+    }
+
     fun sunrise(s: LookSettings, dur: Int): String =
         "$dur min · ${if (s.sunCustom) "own colours" else "theme colours"} · up to ${s.sunMax}% bright"
 

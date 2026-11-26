@@ -55,8 +55,11 @@ For best results, tap **Fix** next to anything the Settings → Status card flag
 ## Development
 
 - Everything is in `android/` (Kotlin and a little Java):
-  - Home and settings: `SettingsActivity.kt` and `HomeScreen.kt` (the alarm card and quick alarms). The settings follow the night: Night and Sunrise (`LookScreen.kt`), Wake-up sound (`SoundScreen.kt`, `StationsScreen.kt`) and Morning (`MorningScreen.kt`). The detailed Schedule is in `AlarmScreen.kt`. Shared parts are in `SettingsUi.kt` and `Themes.kt`, and the colour themes in `ThemeData.kt`.
-  - The night, alarm and morning screens: `AlarmFlowActivity.kt` and `AlarmFlowViews.kt`. The wake-up sound is in `WakeSound.kt`, the sleep sounds in `NoisePlayer.kt`, the sunrise maths in `Sunrise.kt` and the morning data in `MorningData.kt` and `CalendarData.kt`.
+  - Home and settings (`SettingsActivity.kt`, Jetpack Compose with Material 3).
+    - **Home** (`HomeScreen.kt`) is only about tonight's alarm. It has a status line ("Ready for tonight" or what to fix), the next-alarm card (days, Skip, Pause, Edit), quick alarms, and Goodnight and Preview. Your week (📈) and Settings (⚙) are in the top bar.
+    - **Alarm** (`AlarmScreen.kt`) is everything about when and how it rings: time, days, public holidays, pause, per-day times, sound (`SoundScreen.kt`, `StationsScreen.kt`), sunrise length, snooze and extra alarms.
+    - **Settings** (`SettingsScreens.kt`) covers Night and Look (`LookScreen.kt`), Morning (`MorningScreen.kt`), Phone check and rehearsal, Back up and restore, and About.
+    - Every action confirms itself with a snackbar, with Undo where it makes sense. Shared parts are in `SettingsUi.kt` and `Themes.kt`.
   - The schedule: `AlarmSettings.kt` (next alarm and plan), `AlarmScheduler.java` (Android alarms and the backup alarm), `Evening.kt` (bedtime reminder, auto-Goodnight) and `Holidays.kt`.
   - Also: `Widgets.kt` (the widget and the Quick Settings tile), `AlarmLog.kt` (the wake-up log, the weekly view and settings backup) and `Secret.kt` (the Todoist token, encrypted).
 - Tests: `gradle testDebugUnitTest` runs the unit tests and the screen tests (Robolectric, `app/src/test/.../screens`: the settings screens and the real night, alarm and morning screens), with no phone needed.

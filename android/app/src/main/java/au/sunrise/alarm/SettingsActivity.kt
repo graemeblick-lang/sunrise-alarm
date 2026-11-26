@@ -9,6 +9,10 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -29,25 +33,29 @@ import java.time.ZonedDateTime
  */
 class SettingsActivity : ComponentActivity() {
     companion object {
-        val PAGES = setOf("home", "alarm", "night", "sunrise", "morning", "sound", "stations", "week")
+        val PAGES = setOf("home", "alarm", "perday", "sound", "stations", "week", "settings", "night", "look", "colours",
+            "morning", "checks", "backup", "about")
         /** Something the page should do when you come back (e.g. "preview" the sunrise). */
         const val PREF_ACTION = "settingsAction"
     }
 
-    /** Which screen is showing. */
-    private var route by mutableStateOf("home")
-    /** Opened by the page for one screen (older flow): Back closes instead of going home. */
+    /** The screens open, oldest first: Back goes to the one before ("home" at the bottom). */
+    private val stack = mutableStateListOf("home")
+    private val route get() = stack.last()
+    /** Opened for one screen only: Back closes instead of going home. */
     private var single = false
-    /** Bumped whenever the app comes back to the front, so the home screen re-reads everything. */
+    /** Bumped whenever the app comes back to the front, so the screens re-read everything. */
     private var resumes by mutableIntStateOf(0)
     private var themeKey by mutableStateOf("sunrise")
+    private var snack: Snack? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val page = intent.getStringExtra("page")?.takeIf { it in PAGES && it != "home" }
         single = page != null
-        route = savedInstanceState?.getString("route") ?: page ?: "home"
+        val saved = savedInstanceState?.getString("stack")?.split(",")?.filter { it in PAGES }
+        stack.clear(); stack.addAll(saved?.takeIf { it.isNotEmpty() } ?: listOf(page ?: "home"))
         themeKey = SettingsStore.read(this).optString("theme", "sunrise")
         // A Todoist token saved by an older version is encrypted now
         runCatching { SettingsStore.update(this) { j -> if (!Secret.isSealed(j.optString("todoToken", ""))) MorningSettings.from(j).into(j) } }
@@ -60,70 +68,94 @@ class SettingsActivity : ComponentActivity() {
 
         setContent {
             SunriseTheme(themeKey) {
-                // Back from a settings screen goes home ("stations" handles its own Back, to Wake-up sound)
-                BackHandler(enabled = !single && route != "home" && route != "stations") { route = "home" }
-                key(route) { Screen(route) }
+                val host = remember { SnackbarHostState() }
+                val scope = rememberCoroutineScope()
+                val s = remember { Snack(host, scope) }
+                snack = s
+                CompositionLocalProvider(LocalSnack provides s) {
+                    // Back goes to the screen before ("stations" handles its own Back, to Sound)
+                    BackHandler(enabled = stack.size > 1 && route != "stations") { goBack() }
+                    key(route, stack.size) { Screen(route) }
+                }
             }
         }
     }
 
+    private fun open(r: String) { if (r in PAGES) stack.add(r) }
+
+    private fun goBack() { if (stack.size > 1) stack.removeAt(stack.size - 1) else finish() }
+
     @Composable
     private fun Screen(r: String) {
         val json = remember { SettingsStore.read(this) }
-        val back: () -> Unit = { if (single || r == "home") finish() else route = "home" }
+        val is24 = DateFormat.is24HourFormat(this)
+        val back: () -> Unit = { goBack() }
+        val preview: () -> Unit = { if (single) requestAction("preview") else startNight("preview") }
         when (r) {
             "home" -> HomeScreen(
                 refresh = resumes,
-                is24Hour = DateFormat.is24HourFormat(this),
+                is24Hour = is24,
                 save = { s -> save { s.into(it) } },
-                onOpen = { route = it },
+                onOpen = { open(it) },
                 onStart = { action -> startNight(action) },
-                onRestored = { themeKey = SettingsStore.read(this).optString("theme", "sunrise"); resumes++ },
             )
-            "night" -> NightScreen(
-                initial = LookSettings.from(json),
-                initialNight = NightSettings.from(json),
-                onChange = { s -> themeKey = s.theme; save { s.into(it) } },
-                onNightChange = { n -> save { n.into(it) } },
-                onBack = back,
-            )
-            "sunrise" -> SunriseScreen(
-                initial = LookSettings.from(json),
-                dur = AlarmSettings.from(json).dur,
+            "alarm" -> AlarmScreen(
+                initial = AlarmSettings.from(json),
+                soundSummary = HomeText.soundRow(SoundSettings.from(json)),
+                is24Hour = is24,
                 onChange = { s -> save { s.into(it) } },
-                onDur = { d -> save { it.put("dur", d) } },
-                onPreview = { if (single) requestAction("preview") else startNight("preview") },
+                onOpen = { open(it) },
                 onBack = back,
             )
+            "perday" -> PerDayScreen(AlarmSettings.from(json), is24, onChange = { s -> save { s.into(it) } }, onBack = back)
             "sound", "stations" -> SoundFlow(
                 startOnStations = r == "stations",
                 initial = SoundSettings.from(json),
                 save = { s -> save { s.into(it) } },
-                snooze = AlarmSettings.from(json).snooze,
-                onSnooze = { v -> save { it.put("snooze", v) } },
                 spotifyClientId = BuildConfig.SPOTIFY_CLIENT_ID.ifEmpty { json.optString("spClient", "") },
                 onClose = back,
             )
-            "week" -> WeekScreen(AlarmLog.entries(this), DateFormat.is24HourFormat(this), onBack = back)
+            "week" -> WeekScreen(AlarmLog.entries(this), is24, onBack = back)
+            "settings" -> SettingsHomeScreen(resumes, onOpen = { open(it) }, onBack = back)
+            "night" -> NightScreen(NightSettings.from(json), onNightChange = { n -> save { n.into(it) } }, onBack = back)
+            "look" -> LookScreen(
+                initial = LookSettings.from(json),
+                onChange = { s -> themeKey = s.theme; save { s.into(it) } },
+                onOpen = { open(it) },
+                onPreview = preview,
+                onBack = back,
+            )
+            "colours" -> ColoursScreen(LookSettings.from(json), onChange = { s -> save { s.into(it) } }, onPreview = preview, onBack = back)
             "morning" -> MorningScreen(
                 initial = MorningSettings.from(json),
                 onChange = { s -> save { s.into(it) } },
                 onBack = back,
             )
-            else -> AlarmScreen(
-                initial = AlarmSettings.from(json),
-                is24Hour = DateFormat.is24HourFormat(this),
-                onChange = { s -> save { s.into(it) } },
-                onBack = back,
-            )
+            "checks" -> ChecksScreen(resumes, is24, onRehearse = { startRehearsal() }, onBack = back)
+            "backup" -> BackupScreen(onRestored = { themeKey = SettingsStore.read(this).optString("theme", "sunrise"); resumes++ }, onBack = back)
+            "about" -> AboutScreen(onBack = back)
+            else -> HomeScreen(resumes, is24, save = { s -> save { s.into(it) } }, onOpen = { open(it) }, onStart = { startNight(it) })
         }
+    }
+
+    /** Rehearse the alarm: a real one-off alarm in 2½ minutes with a 1½-minute sunrise (opens in a minute). */
+    private fun startRehearsal() {
+        val a = AlarmSettings.from(SettingsStore.read(this))
+        val t = System.currentTimeMillis()
+        val at = t + 150_000
+        save { a.copy(once = at, onceStart = t + 60_000, skip = if (a.skip == at) 0 else a.skip).into(it) }
+        AlarmLog.rehearsal(this, at)
+        resumes++
+        val time = HomeText.time(AlarmSettings.formatTime(java.time.Instant.ofEpochMilli(at).atZone(java.time.ZoneId.systemDefault()).toLocalTime()),
+            DateFormat.is24HourFormat(this))
+        snack?.show("Rehearsal set: lock the phone now. The sunrise opens in about a minute and it rings at $time.")
     }
 
     override fun onResume() {
         super.onResume()
         resumes++
         reschedule()
-        Holidays.refresh(this)     // at most once a week, in the background   // the alarm screens may have changed things (e.g. turned one alarm off)
+        Holidays.refresh(this)     // at most once a week, in the background
         // A music fade-in that was cut short (e.g. the phone restarted mid-alarm) left the media volume low: put it back
         if (AlarmScheduler.activeAlarm(this, 0) == 0L) runCatching { NativeAudio(this).musicRestore() }
     }
@@ -136,7 +168,7 @@ class SettingsActivity : ComponentActivity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        outState.putString("route", route)
+        outState.putString("stack", stack.joinToString(","))
     }
 
     /** Save a change and reschedule the alarms from it, straight away. */
@@ -182,7 +214,7 @@ class SettingsActivity : ComponentActivity() {
             if (!connected && BuildConfig.SPOTIFY_CLIENT_ID.isNotEmpty()) "Wake-up ${link.second} saved. Tap Connect Spotify so Sunrise can start it."
             else "Wake-up ${link.second} saved", Toast.LENGTH_LONG).show()
         single = false
-        route = "sound"
+        stack.clear(); stack.addAll(listOf("home", "alarm", "sound"))
     }
 }
 
@@ -190,16 +222,16 @@ class SettingsActivity : ComponentActivity() {
 @Composable
 fun SoundFlow(
     startOnStations: Boolean, initial: SoundSettings, save: (SoundSettings) -> Unit,
-    snooze: Int, onSnooze: (Int) -> Unit, spotifyClientId: String, onClose: () -> Unit,
+    spotifyClientId: String, onClose: () -> Unit,
 ) {
     var s by remember { mutableStateOf(initial) }
     val update: (SoundSettings) -> Unit = { n -> s = n; save(n) }
     var onStations by rememberSaveable { mutableStateOf(startOnStations) }
-    // Back from Find stations goes to Wake-up sound (unless that's where you came in)
+    // Back from Find stations goes to Sound (unless that's where you came in)
     BackHandler(enabled = onStations && !startOnStations) { onStations = false }
     if (onStations) {
         StationsScreen(s, update, onBack = { if (startOnStations) onClose() else onStations = false })
     } else {
-        SoundScreen(s, update, snooze, onSnooze, spotifyClientId, onFindStations = { onStations = true }, onBack = onClose)
+        SoundScreen(s, update, spotifyClientId, onFindStations = { onStations = true }, onBack = onClose)
     }
 }
