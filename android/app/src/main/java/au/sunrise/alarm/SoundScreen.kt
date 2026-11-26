@@ -30,6 +30,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.Alignment
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
@@ -56,12 +66,12 @@ private val SPOTIFY_ERRORS = mapOf(
     "UnsupportedFeatureVersionException" to "Update the Spotify app",
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SoundScreen(
-    s: SoundSettings, update: (SoundSettings) -> Unit, snooze: Int, onSnooze: (Int) -> Unit,
+    s: SoundSettings, update: (SoundSettings) -> Unit,
     spotifyClientId: String, onFindStations: () -> Unit, onBack: () -> Unit,
 ) {
-    var snoozeLen by remember { mutableStateOf(snooze) }
     val context = LocalContext.current
     // Callbacks that arrive later (Spotify) must change the latest settings, not the ones from when they started
     val latest by rememberUpdatedState(s)
@@ -110,20 +120,15 @@ fun SoundScreen(
         }
     }
 
-    SettingsScaffold("Wake-up sound", onBack) {
-        SectionTitle("Play")
-        Column(Modifier.selectableGroup()) {
-            SoundSettings.SOURCES.forEach { src ->
-                val (title, sub) = SOURCE_LABELS.getValue(src)
-                val selected = s.src == src
-                ListItem(
-                    headlineContent = { Text(title) },
-                    supportingContent = { Text(sub) },
-                    leadingContent = { RadioButton(selected = selected, onClick = null) },
-                    modifier = Modifier.selectable(selected = selected, role = Role.RadioButton) { tester.stop(); update(s.copy(src = src)) },
-                )
-            }
-        }
+    var editingWeekends by remember { mutableStateOf(false) }
+    var editingEarly by remember { mutableStateOf(false) }
+
+    SettingsScaffold("Sound", onBack) {
+        // The source first (segmented buttons), then what's needed for it
+        Spacer(Modifier.height(8.dp))
+        Choice(SoundSettings.SOURCES.indices.toList(), SoundSettings.SOURCES.indexOf(s.src).coerceAtLeast(0),
+            { listOf("Chimes", "Radio", "Spotify", "App")[it] }) { tester.stop(); update(s.copy(src = SoundSettings.SOURCES[it])) }
+        Hint(SOURCE_LABELS.getValue(s.src).second)
 
         when (s.src) {
             "radio" -> {
@@ -234,36 +239,77 @@ fun SoundScreen(
             }
         }
 
-        Row(Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) {
+        SectionTitle("Volume")
+        PercentSlider("Loudest", s.vol, 10..100) { update(s.copy(vol = it)); tester.stop() }
+        ControlLabel("Fade in over")
+        Choice(SoundSettings.FADES, s.fade, { "$it min" }) { update(s.copy(fade = it)) }
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
             FilledTonalButton(onClick = { if (tester.playing) tester.stop() else tester.start(s, spotifyClientId) }) {
                 Text(if (tester.playing) "■ Stop" else "▶ Test sound")
             }
         }
         testStatus?.let { Hint(it) }
 
-        SectionTitle("Volume")
-        PercentSlider("Maximum volume", s.vol, 10..100) { update(s.copy(vol = it)); tester.stop() }
-        Text("Fade in over", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
-        Choice(SoundSettings.FADES, s.fade, { "$it min" }) { update(s.copy(fade = it)) }
-
+        SectionTitle("More")
+        ValueRow("Weekends", when (s.weekendSrc) {
+            "" -> "The same as weekdays"
+            else -> listOf("Chimes", "Radio", "Spotify", "Music app")[SoundSettings.SOURCES.indexOf(s.weekendSrc)] + " instead"
+        }) { editingWeekends = true }
         if (s.src != "chimes") {
-            SectionTitle("Music before the alarm")
-            Choice(SoundSettings.EARLY, s.earlyMin, { if (it == 0) "Off" else "$it min" }) { update(s.copy(earlyMin = it)) }
-            if (s.earlyMin > 0) {
-                PercentSlider("Volume before the alarm", s.earlyVol, 5..100) { update(s.copy(earlyVol = it)) }
-            }
-            Hint("Music started before alarm time (automatically, or by tapping the screen) fades in to this volume and stays there. At alarm time it rises to your maximum volume.")
+            ValueRow("Music before the alarm", if (s.earlyMin == 0) "Off" else "Starts ${s.earlyMin} min early at ${s.earlyVol}%") { editingEarly = true }
         }
+        Spacer(Modifier.height(16.dp))
+    }
 
-        SectionTitle("Snooze")
-        Choice(AlarmSettings.SNOOZE_LENGTHS, snoozeLen, { "$it min" }) { snoozeLen = it; onSnooze(it) }
+    if (editingWeekends) {
+        AlertDialog(
+            onDismissRequest = { editingWeekends = false },
+            title = { Text("Weekends") },
+            text = {
+                Column(Modifier.selectableGroup()) {
+                    val options = listOf("" to "The same as weekdays") + SoundSettings.SOURCES.zip(listOf("Chimes", "Radio", "Spotify", "Music app"))
+                    options.forEach { (key, name) ->
+                        val selected = s.weekendSrc == key
+                        Row(
+                            Modifier.fillMaxWidth().selectable(selected = selected, role = Role.RadioButton) {
+                                update(s.copy(weekendSrc = key)); editingWeekends = false
+                            }.padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(selected = selected, onClick = null)
+                            Spacer(Modifier.width(12.dp))
+                            Text(name)
+                        }
+                    }
+                    Text("Saturdays and Sundays use the station, playlist or app chosen for weekdays.",
+                        style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+                }
+            },
+            confirmButton = { TextButton(onClick = { editingWeekends = false }) { Text("Close") } },
+        )
+    }
 
-        SectionTitle("Weekends")
-        val weekendOptions = listOf("") + SoundSettings.SOURCES
-        Choice(weekendOptions.indices.toList(), weekendOptions.indexOf(s.weekendSrc).coerceAtLeast(0),
-            { listOf("Same", "Chimes", "Radio", "Spotify", "App")[it] }) { update(s.copy(weekendSrc = weekendOptions[it])) }
-        Hint(if (s.weekendSrc.isEmpty()) "Saturdays and Sundays wake to the same as weekdays."
-             else "Saturdays and Sundays wake to this instead. It uses the station, playlist or app chosen above (pick it under Play to change it, then switch back).")
+    if (editingEarly) {
+        AlertDialog(
+            onDismissRequest = { editingEarly = false },
+            title = { Text("Music before the alarm") },
+            text = {
+                Column {
+                    Text("Music starts quietly before alarm time, then rises to your loudest volume at alarm time.",
+                        style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(bottom = 12.dp))
+                    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                        SoundSettings.EARLY.forEachIndexed { i, v ->
+                            SegmentedButton(
+                                selected = s.earlyMin == v, onClick = { update(s.copy(earlyMin = v)) },
+                                shape = SegmentedButtonDefaults.itemShape(index = i, count = SoundSettings.EARLY.size),
+                            ) { Text(if (v == 0) "Off" else "$v min") }
+                        }
+                    }
+                    if (s.earlyMin > 0) PercentSlider("Volume until alarm time", s.earlyVol, 5..100) { update(s.copy(earlyVol = it)) }
+                }
+            },
+            confirmButton = { TextButton(onClick = { editingEarly = false }) { Text("Done") } },
+        )
     }
 }
 

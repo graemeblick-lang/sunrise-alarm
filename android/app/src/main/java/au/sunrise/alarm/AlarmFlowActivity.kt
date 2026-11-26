@@ -221,7 +221,7 @@ class AlarmFlowActivity : ComponentActivity() {
 
     private fun enterRing() {
         noise.stop(); sleepUntil = 0; preflight = emptyList(); lastPlayed = ""
-        mode = "ring"; status = ""; ringEnteredAt = System.currentTimeMillis()
+        mode = "ring"; status = ""; ringEnteredAt = System.currentTimeMillis(); extrasCancelled = false
         if (!preview) { AlarmScheduler.markRinging(this); PlaybackService.stopBackup(this); AlarmLog.rang(this, alarmAt, ringEnteredAt) }
         if (sound.earlyPlay && sound.using != null) sound.continueFromEarly()
         else { sound.earlyPlay = false; startSound() }
@@ -319,8 +319,15 @@ class AlarmFlowActivity : ComponentActivity() {
     fun dismissPreflight() { preflight = emptyList() }
 
     /** The extra alarms still to come after the one that just rang (heavy sleepers), for the morning screen. */
-    fun extrasToCome(): List<Long> =
-        if (preview) emptyList() else alarm.extrasStillToCome(alarmAt, java.time.ZoneId.systemDefault()).filter { it > System.currentTimeMillis() }
+    fun extrasToCome(): List<Long> {
+        if (preview) return emptyList()
+        val a = alarm
+        return a.extrasStillToCome(alarmAt, java.time.ZoneId.systemDefault()).filter { it > System.currentTimeMillis() && it > a.handled }
+    }
+
+    /** Set when "cancel the extra alarms" was tapped this morning, so the screen can say it worked. */
+    var extrasCancelled by mutableStateOf(false)
+        private set
 
     /** "I'm up, cancel the rest": the remaining extra alarms won't ring. */
     fun cancelExtras() {
@@ -328,6 +335,7 @@ class AlarmFlowActivity : ComponentActivity() {
         SettingsStore.update(this) { it.put("handled", last) }
         settings = SettingsStore.read(this)
         reschedule()
+        extrasCancelled = true
         morningRefresh++
     }
 

@@ -66,7 +66,7 @@ fun MorningScreen(initial: MorningSettings, onChange: (MorningSettings) -> Unit,
         if (granted) locate() else status = "Sunrise needs location permission to find your weather. You can keep the current place."
     }
 
-    SettingsScaffold("Morning screen", onBack) {
+    SettingsScaffold("Morning", onBack) {
         SectionTitle("Weather")
         ListItem(
             headlineContent = { Text(s.place) },

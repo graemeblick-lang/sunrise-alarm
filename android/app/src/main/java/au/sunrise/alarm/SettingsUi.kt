@@ -4,6 +4,14 @@ import android.os.Build
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.runtime.staticCompositionLocalOf
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -81,19 +89,52 @@ fun SunriseTheme(themeKey: String, content: @Composable () -> Unit) {
 
 // ---------- layout ----------
 
-/** A settings screen: large collapsing title with Back, and a scrolling column of content. */
+/**
+ * Short confirmations at the bottom of the screen (Material snackbars), with an optional action such as Undo.
+ * Every action that changes something says so, so you're never left wondering whether a tap worked.
+ */
+class Snack(private val host: SnackbarHostState, private val scope: CoroutineScope) {
+    val state get() = host
+    fun show(message: String, action: String? = null, onAction: () -> Unit = {}) {
+        scope.launch {
+            host.currentSnackbarData?.dismiss()
+            val r = host.showSnackbar(message, action, withDismissAction = action == null,
+                duration = if (action != null) SnackbarDuration.Long else SnackbarDuration.Short)
+            if (r == SnackbarResult.ActionPerformed) onAction()
+        }
+    }
+}
+
+/** The snackbar for the current screens (none in tests, where messages are simply not shown). */
+val LocalSnack = staticCompositionLocalOf<Snack?> { null }
+
+/** Show a confirmation (and an optional action) at the bottom of the screen. */
+@Composable
+fun rememberSnack(): (String, String?, () -> Unit) -> Unit {
+    val snack = LocalSnack.current
+    return { msg, action, onAction -> snack?.show(msg, action, onAction) }
+}
+
+/** A settings screen: large collapsing title with Back (and optional actions), and a scrolling column of content. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScaffold(title: String, onBack: (() -> Unit)?, content: @Composable ColumnScope.() -> Unit) {
+fun SettingsScaffold(
+    title: String, onBack: (() -> Unit)?,
+    actions: @Composable RowScope.() -> Unit = {},
+    content: @Composable ColumnScope.() -> Unit,
+) {
     val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val snack = LocalSnack.current
     Scaffold(
         modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
+        snackbarHost = { if (snack != null) SnackbarHost(snack.state) },
         topBar = {
             LargeTopAppBar(
                 title = { Text(title) },
                 navigationIcon = {
                     if (onBack != null) IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
+                actions = actions,
                 scrollBehavior = scroll,
             )
         },
@@ -157,4 +198,28 @@ fun Hint(text: String) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
     )
+}
+
+/**
+ * A row that opens something, showing what it's set to (the Material "preference" pattern):
+ * an optional emoji icon, the title, its current value underneath, and a chevron.
+ */
+@Composable
+fun ValueRow(title: String, value: String?, icon: String? = null, onClick: () -> Unit) {
+    ListItem(
+        headlineContent = { Text(title) },
+        supportingContent = value?.let { { Text(it) } },
+        leadingContent = icon?.let { { Text(it, style = MaterialTheme.typography.titleLarge) } },
+        trailingContent = { Text("›", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant) },
+        modifier = Modifier.clickableRow("open $title", onClick),
+    )
+}
+
+/** A plain label above a control (segmented buttons, slider) inside a section. */
+@Composable
+fun ControlLabel(text: String, supporting: String? = null) {
+    Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 6.dp)) {
+        Text(text, style = MaterialTheme.typography.bodyLarge)
+        supporting?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+    }
 }
